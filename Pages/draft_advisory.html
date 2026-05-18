@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/style.css">
+    <title>Draft Advisory</title>
+</head>
+<body>
+    <div class="page-shell">
+        <header class="header">
+            <img src="/logo.png" alt="ODPC logo" class="logo">
+            <h1>Draft Advisory</h1>
+        </header>
+
+        <main class="container">
+            <section class="card">
+                <h2>Enquiry Details</h2>
+                <p><strong>Subject:</strong> {{subject}}</p>
+                <p><strong>Description:</strong> {{description}}</p>
+            </section>
+
+            <section class="card">
+                <h2>Prepare / Edit Advisory Response</h2>
+                <form action="/submit_advisory" method="post" enctype="multipart/form-data">
+                    <input type="hidden" name="enquiry_id" value="{{enquiry_id}}">
+                    <input type="hidden" name="dpo_id" value="{{dpo_id}}">
+
+                    <label for="advisory_title">Advisory Title:</label>
+                    <input type="text" id="advisory_title" name="advisory_title" value="{{advisory_title}}" required>
+
+                    <label for="draft_content">Advisory Content:</label>
+                    <textarea id="draft_content" name="draft_content" rows="10" required>{{draft_content}}</textarea>
+
+                    <label for="advisory_file">Attach Supporting Document (optional):</label>
+                    <input type="file" id="advisory_file" name="advisory_file">
+
+                    {{existing_file}}
+
+                    <button type="submit">Submit Advisory</button>
+                </form>
+            </section>
+        </main>
+
+        <footer class="footer">
+            © 2025 Office of the Data Protection Commissioner, Kenya
+        </footer>
+    </div>
+</body>
+</html>

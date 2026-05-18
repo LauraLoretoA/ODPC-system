@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - ODPC Enquirer</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="page-shell">
+        <header class="header">
+            <img src="/logo.png" alt="ODPC logo" class="logo">
+            <h1>ODPC Enquirer Registration</h1>
+        </header>
+        <main class="container">
+            <section class="card">
+                <h2>Register as Enquirer</h2>
+                <p class="subheader">Create account to submit and track enquiries.</p>
+                <form method="POST" action="/enquirer_register">
+                    <div>
+                        <label for="name">Full Name</label>
+                        <input id="name" type="text" name="name" required>
+                    </div>
+                    <div>
+                        <label for="email">Email</label>
+                        <input id="email" type="email" name="email" required>
+                    </div>
+                    <div>
+                        <label for="password">Password</label>
+                        <input id="password" type="password" name="password" required minlength="6">
+                    </div>
+                    <button type="submit">Register</button>
+                </form>
+                <p>Already registered? <a href="/enquirer_login">Login here</a></p>
+                <p><small>Account needs admin approval to submit enquiries.</small></p>
+            </section>
+        </main>
+        <footer class="footer">
+            © 2025 Office of the Data Protection Commissioner, Kenya
+        </footer>
+    </div>
+</body>
+</html>

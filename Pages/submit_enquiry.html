@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submit Enquiry - ODPC</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="page-shell">
+        <header class="header">
+            <img src="/logo.png" alt="ODPC logo" class="logo">
+            <h1>Submit New Enquiry</h1>
+        </header>
+        <main class="container">
+            <section class="card">
+                <h2>Tell us about your data protection enquiry</h2>
+                <form method="POST" action="/submit_enquiry">
+                    <div>
+                        <label for="subject">Subject</label>
+                        <input id="subject" type="text" name="subject" required>
+                    </div>
+                    <div>
+                        <label for="description">Description</label>
+                        <textarea id="description" name="description" rows="8" required></textarea>
+                    </div>
+                    <button type="submit">Submit Enquiry</button>
+                </form>
+                <a href="/enquirer_dashboard"><button>Back to Dashboard</button></a>
+            </section>
+        </main>
+        <footer class="footer">
+            © 2025 Office of the Data Protection Commissioner, Kenya
+        </footer>
+    </div>
+</body>
+</html>
