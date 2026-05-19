@@ -5,6 +5,7 @@ def create_tables():
     conn.execute("PRAGMA foreign_keys = ON")
     cursor = conn.cursor()
 
+
     # USERS TABLE
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS users (
@@ -20,12 +21,24 @@ def create_tables():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS enquirers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        enquirer_type TEXT NOT NULL,
+
         name TEXT NOT NULL,
         email TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
-        admin_verified INTEGER DEFAULT 0
+
+        pobox TEXT,
+        location TEXT,
+        county TEXT,
+        kra_pin TEXT,
+
+        id_number TEXT,
+
+        admin_verified INTEGER DEFAULT 0,
+        admin_rejection_reason TEXT
     )
     """)
+
 
     # ENQUIRIES TABLE
     cursor.execute("""
@@ -82,10 +95,47 @@ def create_tables():
     except sqlite3.OperationalError:
         pass  # Column already exists
 
+    # Enquirers enrichment columns
+    try:
+        cursor.execute("ALTER TABLE enquirers ADD COLUMN enquirer_type TEXT")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
+    try:
+        cursor.execute("ALTER TABLE enquirers ADD COLUMN pobox TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE enquirers ADD COLUMN location TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE enquirers ADD COLUMN county TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE enquirers ADD COLUMN kra_pin TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE enquirers ADD COLUMN id_number TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE enquirers ADD COLUMN admin_rejection_reason TEXT")
+    except sqlite3.OperationalError:
+        pass
+
     try:
         cursor.execute("ALTER TABLE enquiries ADD COLUMN enquirer_id INTEGER")
     except sqlite3.OperationalError:
         pass  # Column already exists
+
 
     conn.commit()
     conn.close()

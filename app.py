@@ -156,11 +156,22 @@ class MyHandler(BaseHTTPRequestHandler):
             conn = sqlite3.connect("odpc.db")
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT id, name, email, admin_verified
-                FROM enquirers 
+                SELECT id,
+                       enquirer_type,
+                       name,
+                       email,
+                       pobox,
+                       location,
+                       county,
+                       kra_pin,
+                       id_number,
+                       admin_verified,
+                       admin_rejection_reason
+                FROM enquirers
                 WHERE admin_verified = 0
                 ORDER BY id DESC
             """)
+
             pending_enquirers = cursor.fetchall()
             print(f"DEBUG ADMIN: Found {len(pending_enquirers)} pending enquirers: {pending_enquirers}")
             conn.close()
@@ -178,25 +189,41 @@ class MyHandler(BaseHTTPRequestHandler):
             pending_html = "<h2>Pending Enquirers (Need Verification)</h2>\n"
             if pending_enquirers:
                 for enq in pending_enquirers:
-                    enq_id, name, email, verified = enq
+                    # columns:
+                    # 0=id,1=enquirer_type,2=name,3=email,4=pobox,5=location,6=county,7=kra_pin,8=id_number,9=admin_verified,10=admin_rejection_reason
+                    enq_id, enquirer_type, name, email, pobox, location, county, kra_pin, id_number, verified, admin_rejection_reason = enq
+
+                    id_display = id_number if enquirer_type == 'individual' else '—'
+
                     pending_html += f"""
                 <article class='item-card'>    
                     <p><strong>ID:</strong> {enq_id}</p>    
+                    <p><strong>Type:</strong> {enquirer_type.title()}</p>
                     <p><strong>Name:</strong> {name}</p>    
                     <p><strong>Email:</strong> {email}</p>   
+
+                    <p><strong>P.O. Box:</strong> {pobox or '—'}</p>
+                    <p><strong>Location:</strong> {location or '—'}</p>
+                    <p><strong>County:</strong> {county or '—'}</p>
+
+                    <p><strong>KRA PIN:</strong> {kra_pin or '—'}</p>
+                    <p><strong>ID Number:</strong> {id_display or '—'}</p>
+
                     <p><strong>Status:</strong> <span style='color:orange;'>Pending Verification</span></p>   
                     <div class='item-actions'>        
                         <form method="POST" action="/verify_enquirer" style="display:inline;">           
                             <input type="hidden" name="enq_id" value="{enq_id}">            
-                            <button type="submit">Verify & Approve</button>        
+                            <button type="submit" onclick="return confirm('Are you sure you would like to approve this profile?')">Verify & Approve</button>        
                         </form> 
                         <form method="POST" action="/reject_enquirer" style="display:inline;">
                             <input type="hidden" name="enq_id" value="{enq_id}">
-                            <button type="submit" style="background-color:red;">Reject</button>
+                            <textarea name="rejection_reason" placeholder="Enter rejection reason" required rows="2" style="width:220px; vertical-align:middle;"></textarea>
+                            <button type="submit" style="background-color:red;" onclick="return confirm('Are you sure you would like to reject this profile?')">Reject</button>
                         </form>  
                     </div>
                 </article>
                 """
+
             else:
                 pending_html += "<p>No pending enquirers needing verification.</p>"
 
@@ -766,16 +793,29 @@ class MyHandler(BaseHTTPRequestHandler):
 
             conn = sqlite3.connect("odpc.db")
             cursor = conn.cursor()
-            cursor.execute("UPDATE enquirers SET admin_verified = 1 WHERE id = ?", (enq_id,))
+            cursor.execute(
+                "UPDATE enquirers SET admin_verified = 1, admin_rejection_reason = NULL WHERE id = ?",
+                (enq_id,)
+            )
             conn.commit()
             conn.close()
 
-            self.send_response(303)
-            self.send_header("Location", "/admin")
+            # Feedback
+            self.send_response(200)
+            self.send_header("Content-type", "text/html")
             self.end_headers()
+            self.wfile.write(b"""
+<!DOCTYPE html>
+<html>
+<body>
+    <h3>Approval successful.</h3>
+    <a href="/admin">Back to Admin Dashboard</a>
+</body>
+</html>
+""")
             return
+
         
-        # REJECT ENQUIRER (ADMIN)
         # REJECT ENQUIRER (ADMIN)
         elif self.path == "/reject_enquirer":
             content_length = int(self.headers['Content-Length'])
@@ -783,17 +823,36 @@ class MyHandler(BaseHTTPRequestHandler):
             data = urllib.parse.parse_qs(post_data.decode())
 
             enq_id = data.get("enq_id")[0]
+            rejection_reason = data.get("rejection_reason", [""])[0].strip()
+
+            if not rejection_reason:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"Rejection reason is required")
+                return
 
             conn = sqlite3.connect("odpc.db")
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM enquirers WHERE id = ? AND admin_verified = 0", (enq_id,))
+
+            cursor.execute(
+                """
+                UPDATE enquirers
+                SET admin_verified = 0,
+                    admin_rejection_reason = ?
+                WHERE id = ?
+                """,
+                (rejection_reason, enq_id)
+            )
+
             conn.commit()
             conn.close()
 
+            # Simple feedback
             self.send_response(303)
             self.send_header("Location", "/admin")
             self.end_headers()
             return
+
         
         # ASSIGN DPO LOGIC (HOD)
         elif self.path == "/assign_dpo":
@@ -955,22 +1014,97 @@ class MyHandler(BaseHTTPRequestHandler):
             post_data = self.rfile.read(content_length)
             data = urllib.parse.parse_qs(post_data.decode())
 
-            name = data.get("name")[0]
-            email = data.get("email")[0]
-            password = data.get("password")[0]
+            # Required common fields
+            enquirer_type = data.get("enquirer_type", [""])[0]
+            name = data.get("name", [""])[0].strip()
+            email = data.get("email", [""])[0].strip()
+            password = data.get("password", [""])[0]
+            confirm_password = data.get("confirm_password", [""])[0]
+
+            pobox = data.get("pobox", [""])[0].strip()
+            location = data.get("location", [""])[0].strip()
+            county = data.get("county", [""])[0].strip()
+            kra_pin = data.get("kra_pin", [""])[0].strip()
+
+            # Individual-only
+            id_number = data.get("id_number", [""])[0].strip()
+
+            # Basic validation
+            if enquirer_type not in ["company", "individual"]:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"Invalid enquirer type")
+                return
+
+            if not name or not email or not password or not pobox or not location or not county or not kra_pin:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"Missing required fields")
+                return
+
+            if password != confirm_password:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"Passwords do not match")
+                return
+
+            if enquirer_type == "individual" and not id_number:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"Missing ID number")
+                return
 
             conn = sqlite3.connect("odpc.db")
             cursor = conn.cursor()
+
+            # Duplicate detection: email
+            cursor.execute("SELECT id FROM enquirers WHERE email = ?", (email,))
+            if cursor.fetchone():
+                conn.close()
+                self.send_response(200)
+                self.send_header("Content-type", "text/html")
+                self.end_headers()
+                self.wfile.write(b"<html><body><h3>Profile already exists</h3><a href=\"/enquirer_register\">Try again</a></body></html>")
+                return
+
+            # Duplicate detection: KRA PIN
+            cursor.execute("SELECT id FROM enquirers WHERE kra_pin = ?", (kra_pin,))
+            if cursor.fetchone():
+                conn.close()
+                self.send_response(200)
+                self.send_header("Content-type", "text/html")
+                self.end_headers()
+                self.wfile.write(b"<html><body><h3>Profile already exists</h3><a href=\"/enquirer_register\">Try again</a></body></html>")
+                return
+
+            # Individual duplicate detection: ID number
+            if enquirer_type == "individual":
+                cursor.execute("SELECT id FROM enquirers WHERE id_number = ?", (id_number,))
+                if cursor.fetchone():
+                    conn.close()
+                    self.send_response(200)
+                    self.send_header("Content-type", "text/html")
+                    self.end_headers()
+                    self.wfile.write(b"<html><body><h3>Profile already exists</h3><a href=\"/enquirer_register\">Try again</a></body></html>")
+                    return
+
+            # Insert new pending enquirer
             cursor.execute("""
-                INSERT INTO enquirers (name, email, password)
-                VALUES (?, ?, ?)
-            """, (name, email, password))
+                INSERT INTO enquirers (
+                    enquirer_type, name, email, password,
+                    pobox, location, county, kra_pin, id_number,
+                    admin_verified
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+            """, (enquirer_type, name, email, password, pobox, location, county, kra_pin, id_number))
+
             conn.commit()
             conn.close()
 
             self.send_response(303)
             self.send_header("Location", "/enquirer_login")
             self.end_headers()
+
 
         elif self.path == "/enquirer_login":
             content_length = int(self.headers['Content-Length'])

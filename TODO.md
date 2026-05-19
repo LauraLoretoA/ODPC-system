@@ -1,9 +1,54 @@
-# Task Progress: Fix Pending Enquirers Not Showing in Admin Dashboard
+# TODO - ODPC Enquirer Type Registration + Admin Verification Enhancements
 
-**Approved Plan Steps:**
-- [x] 1. Create TODO.md and breakdown steps
-- [x] 2. Edit app.py: Add detailed logging + regex-based HTML replacement for robustness
-- [ ] 3. Test: Restart server (`python app.py`), login as admin, access http://localhost:8000/admin, check server console for DEBUG ADMIN logs, confirm pending enquirer displays
-- [ ] 4. Hard refresh browser (Ctrl+F5), test "Verify & Approve" button
-- [ ] 5. attempt_completion
+## Step 1: Database schema updates
+- [ ] Update `database.py` / `enquirers` table to add:
+  - `enquirer_type` (company/individual)
+  - `pobox`, `location`, `county`, `kra_pin`
+  - `id_number` (individual)
+  - `admin_rejection_reason`
+- [ ] Add safe ALTER logic so existing DBs are updated.
+
+## Step 2: Enquirer registration page UI
+- [ ] Update `Pages/enquirer_register.html`:
+  - [ ] Add company/individual selector
+  - [ ] Add conditional id_number field for individual
+  - [ ] Add password + confirm_password
+  - [ ] Add shared address/KRA fields
+  - [ ] Add minimal JS for toggling + confirm password matching
+
+## Step 3: Registration backend logic
+- [ ] Update `app.py` POST `/enquirer_register`:
+  - [ ] Validate confirm_password match
+  - [ ] Validate required fields per enquirer_type
+  - [ ] Detect duplicates:
+    - [ ] If `email` already exists -> feedback: profile already exists
+    - [ ] If `kra_pin` already exists -> feedback
+    - [ ] If individual -> if `id_number` already exists -> feedback
+  - [ ] Insert new pending enquirer.
+  - [ ] Return friendly feedback.
+
+## Step 4: Admin dashboard richer verification
+- [ ] Update `app.py` GET `/admin` to query pending enquirers and render more fields.
+- [ ] Add reject form UI with `rejection_reason` textarea.
+- [ ] Add approval confirm prompt and feedback.
+
+## Step 5: Admin verify/reject backend endpoints
+- [ ] Update `app.py` POST `/verify_enquirer`:
+  - [ ] Set `admin_verified=1`
+  - [ ] Provide “approval successful”.
+- [ ] Update `app.py` POST `/reject_enquirer`:
+  - [ ] Store `admin_rejection_reason`
+  - [ ] Keep record (do NOT delete)
+  - [ ] Provide feedback + redirect back to `/admin`.
+
+## Step 6: Verify existing login + dashboard remain functional
+- [ ] Ensure enquirer login still authenticates via `enquirers.admin_verified=1`.
+- [ ] Ensure enquiry submission remains functional.
+
+## Step 7: Manual testing checklist
+- [ ] Register company -> appears in admin pending.
+- [ ] Register individual (with id_number) -> appears.
+- [ ] Duplicate register -> show “profile already exists”.
+- [ ] Admin approve -> feedback + login success.
+- [ ] Admin reject -> reason stored and record remains.
 

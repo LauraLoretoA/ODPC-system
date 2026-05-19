@@ -12,32 +12,127 @@
             <img src="/logo.png" alt="ODPC logo" class="logo">
             <h1>ODPC Enquirer Registration</h1>
         </header>
+
         <main class="container">
             <section class="card">
                 <h2>Register as Enquirer</h2>
                 <p class="subheader">Create account to submit and track enquiries.</p>
-                <form method="POST" action="/enquirer_register">
+
+                <form method="POST" action="/enquirer_register" id="registerForm">
                     <div>
-                        <label for="name">Full Name</label>
+                        <label for="enquirer_type">Account Type</label>
+                        <select id="enquirer_type" name="enquirer_type" required>
+                            <option value="company">Company</option>
+                            <option value="individual">Individual</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="name">Name</label>
                         <input id="name" type="text" name="name" required>
                     </div>
+
                     <div>
                         <label for="email">Email</label>
                         <input id="email" type="email" name="email" required>
                     </div>
+
+                    <div>
+                        <label for="pobox">P.O. Box</label>
+                        <input id="pobox" type="text" name="pobox" required>
+                    </div>
+
+                    <div>
+                        <label for="location">Location</label>
+                        <input id="location" type="text" name="location" required>
+                    </div>
+
+                    <div>
+                        <label for="county">County</label>
+                        <input id="county" type="text" name="county" required>
+                    </div>
+
+                    <div>
+                        <label for="kra_pin">KRA PIN</label>
+                        <input id="kra_pin" type="text" name="kra_pin" required>
+                    </div>
+
+                    <div id="idNumberField" style="display:none;">
+                        <div>
+                            <label for="id_number">ID Number</label>
+                            <input id="id_number" type="text" name="id_number">
+                        </div>
+                    </div>
+
                     <div>
                         <label for="password">Password</label>
                         <input id="password" type="password" name="password" required minlength="6">
                     </div>
+
+                    <div>
+                        <label for="confirm_password">Confirm Password</label>
+                        <input id="confirm_password" type="password" name="confirm_password" required minlength="6">
+                    </div>
+
+                    <p id="formMessage" style="display:none; color:red; margin-top:10px;"></p>
+
                     <button type="submit">Register</button>
                 </form>
+
                 <p>Already registered? <a href="/enquirer_login">Login here</a></p>
                 <p><small>Account needs admin approval to submit enquiries.</small></p>
             </section>
         </main>
+
         <footer class="footer">
             © 2025 Office of the Data Protection Commissioner, Kenya
         </footer>
     </div>
+
+    <script>
+        (function () {
+            const form = document.getElementById('registerForm');
+            const typeSelect = document.getElementById('enquirer_type');
+            const idFieldWrapper = document.getElementById('idNumberField');
+            const idInput = document.getElementById('id_number');
+            const msg = document.getElementById('formMessage');
+
+            function syncType() {
+                const type = typeSelect.value;
+                const showId = type === 'individual';
+                idFieldWrapper.style.display = showId ? 'block' : 'none';
+                if (showId) {
+                    idInput.setAttribute('required', 'required');
+                } else {
+                    idInput.removeAttribute('required');
+                    idInput.value = '';
+                }
+            }
+
+            function passwordsMatch() {
+                const pw = document.getElementById('password').value;
+                const cpw = document.getElementById('confirm_password').value;
+                return pw && cpw && pw === cpw;
+            }
+
+            typeSelect.addEventListener('change', syncType);
+
+            form.addEventListener('submit', function (e) {
+                msg.style.display = 'none';
+                msg.textContent = '';
+
+                if (!passwordsMatch()) {
+                    e.preventDefault();
+                    msg.textContent = 'Passwords do not match.';
+                    msg.style.display = 'block';
+                    return;
+                }
+            });
+
+            // initial
+            syncType();
+        })();
+    </script>
 </body>
 </html>
+
