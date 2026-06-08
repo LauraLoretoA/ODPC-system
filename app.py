@@ -22,7 +22,7 @@ def get_logged_in_user_id(handler):
 
 
 def parse_multipart(post_data, content_type):
-    """Simple multipart/form-data parser (no frameworks)."""
+    
     boundary_marker = "boundary="
     b_idx = content_type.find(boundary_marker)
     if b_idx == -1:
@@ -141,7 +141,22 @@ class MyHandler(BaseHTTPRequestHandler):
                 self.send_response(404)
                 self.end_headers()
             return
+        if self.path == "/main.js":
+            try:
+                with open("Static/main.js", "rb") as js:
+                    js_data = js.read()
 
+                self.send_response(200)
+                self.send_header("Content-type", "application/javascript")
+                self.send_header("Content-Length", str(len(js_data)))
+                self.end_headers()
+                self.wfile.write(js_data)
+
+            except FileNotFoundError:
+                self.send_response(404)
+                self.end_headers()
+
+            return
         # Login page
         if self.path == "/" or self.path == "/login":
             self.send_response(200)
@@ -239,110 +254,161 @@ class MyHandler(BaseHTTPRequestHandler):
 
 
 
-        # HOD Dashboard
+        elif self.path == "/hod_logout":
+            self.send_response(303)
+            self.send_header("Set-Cookie", "user_id=; expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/")
+            self.send_header("Location", "/login")
+            self.end_headers()
+            return
+
         elif self.path.startswith("/hod"):
+            user_id = get_logged_in_user_id(self)
+            if not user_id:
+                self.send_response(303)
+                self.send_header("Location", "/login")
+                self.end_headers()
+                return
+
             conn = sqlite3.connect("odpc.db")
             cursor = conn.cursor()
+            cursor.execute("SELECT role, name, email FROM users WHERE id=?", (user_id,))
+            user_row = cursor.fetchone()
+            if not user_row or user_row[0] != "HOD":
+                conn.close()
+                self.send_response(303)
+                self.send_header("Location", "/login")
+                self.end_headers()
+                return
 
-            # Get enquiries with assigned DPO name
+            hod_profile = {
+                "name": user_row[1] or "",
+                "email": user_row[2] or ""
+            }
+
+            cursor.execute("SELECT COUNT(*) FROM enquiries WHERE status='New'")
+            new_enquiries = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM enquiries WHERE status='Assigned'")
+            assigned_enquiries = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM enquiries WHERE status='Completed'")
+            completed_enquiries = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT COUNT(*) FROM enquiries WHERE status!='Completed'")
+            total_active = cursor.fetchone()[0] or 0
+
             cursor.execute("""
-                SELECT e.*, u.name as dpo_name, enq.name as enq_name, enq.email as enq_email
+                SELECT e.id,
+                       e.enquirer_name,
+                       e.enquirer_email,
+                       e.subject,
+                       e.description,
+                       e.date_received,
+                       e.status,
+                       e.assigned_dpo_id,
+                       u.name as dpo_name
                 FROM enquiries e
                 LEFT JOIN users u ON e.assigned_dpo_id = u.id
-                LEFT JOIN enquirers enq ON e.enquirer_id = enq.id
+                ORDER BY e.id DESC
             """)
             enquiries = cursor.fetchall()
 
-            # Get DPO users
-            cursor.execute("SELECT id, name FROM users WHERE role='DPO'")
-            dpos = cursor.fetchall()
+            cursor.execute("SELECT id, name, email FROM users WHERE role='DPO'")
+            dpo_rows = cursor.fetchall()
+
+            dpo_workloads = []
+            available_dpos = []
+            for dpo in dpo_rows:
+                dpo_id, dpo_name, dpo_email = dpo
+                cursor.execute("""
+                    SELECT id, subject, status
+                    FROM enquiries
+                    WHERE assigned_dpo_id = ?
+                    ORDER BY id DESC
+                """, (dpo_id,))
+                assigned_rows = cursor.fetchall()
+                active_count = len([row for row in assigned_rows if row[2] != 'Completed'])
+                assigned_titles = [row[1] or f"Enquiry {row[0]}" for row in assigned_rows]
+                assigned_enquiry_ids = [str(row[0]) for row in assigned_rows]
+                status_badge = "Available" if active_count < 3 else "Full"
+                badge_style = "hod-status-available" if active_count < 3 else "hod-status-full"
+
+                if active_count < 3:
+                    available_dpos.append({
+                        "id": dpo_id,
+                        "name": dpo_name,
+                        "email": dpo_email,
+                        "activeCount": active_count
+                    })
+
+                dpo_workloads.append({
+                    "id": dpo_id,
+                    "name": dpo_name,
+                    "email": dpo_email,
+                    "activeCount": active_count,
+                    "assignedTitles": assigned_titles,
+                    "assignedEnquiryIds": assigned_enquiry_ids,
+                    "statusBadgeText": status_badge,
+                    "statusBadgeClass": badge_style
+                })
+
             conn.close()
+
+            enquiries_list = []
+            for enq in enquiries:
+                enq_id, enq_name, enq_email, subject, description, date_received, status, assigned_dpo_id, dpo_name = enq
+                deadline_label = "—"
+                if date_received:
+                    try:
+                        received_dt = datetime.strptime(date_received, "%Y-%m-%d %H:%M:%S")
+                    except ValueError:
+                        try:
+                            received_dt = datetime.strptime(date_received, "%Y-%m-%d")
+                        except Exception:
+                            received_dt = None
+                    if received_dt:
+                        deadline_dt = received_dt + timedelta(days=10)
+                        days_remaining = (deadline_dt - datetime.today()).days
+                        if days_remaining < 0:
+                            deadline_label = "OVERDUE"
+                        elif days_remaining == 0:
+                            deadline_label = "Today"
+                        else:
+                            deadline_label = f"{days_remaining} days left"
+
+                enquiries_list.append({
+                    "id": enq_id,
+                    "enquirer_name": enq_name,
+                    "enquirer_email": enq_email,
+                    "title": subject,
+                    "description": description,
+                    "deadline": deadline_label,
+                    "status": status,
+                    "assigned_dpo_id": assigned_dpo_id,
+                    "assigned_dpo_name": dpo_name,
+                })
+
+            hod_state = {
+                "stats": {
+                    "new": new_enquiries,
+                    "assigned": assigned_enquiries,
+                    "completed": completed_enquiries,
+                    "totalActive": total_active
+                },
+                "enquiries": enquiries_list,
+                "dpoWorkloads": dpo_workloads,
+                "availableDpos": available_dpos,
+                "profile": hod_profile
+            }
+
+            with open("Pages/hod_dashboard.html", "r", encoding="utf-8") as f:
+                html = f.read()
+
+            import json
+            state_json = json.dumps(hod_state).replace('</', '<\\/')
+            state_script = f'\n    <script>window.__HOD_STATE__ = {state_json};</script>\n'
+            html = html.replace("</head>", state_script + "</head>", 1)
 
             self.send_response(200)
             self.send_header("Content-type", "text/html")
             self.end_headers()
-
-            html = """
-            <html lang='en'>
-            <head>
-              <meta charset='UTF-8'>
-              <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-              <title>HOD Dashboard</title>
-              <link rel='stylesheet' href='/style.css'>
-            </head>
-            <body>
-              <div class='page-shell'>
-                <header class='header'>
-                  <img src='/logo.png' class='logo' alt='ODPC logo'>
-                  <h1>HOD Dashboard</h1>
-                </header>
-                <main class='container'>
-                  <section class='card'>
-                    <h2>All Enquiries</h2>
-            """
-
-            today = datetime.today()
-
-            for enquiry in enquiries:
-                # enquiry columns: 0=id, 1=name, 2=email, 3=subject, 4=description, 5=date, 6=status, 7=assigned_dpo_id, 8=dpo_name
-                assigned_dpo_id = enquiry[7]
-                dpo_name = enquiry[8]
-
-                # Build DPO options dropdown
-                options = ""
-                for dpo in dpos:
-                    options += f"<option value='{dpo[0]}'>{dpo[1]}</option>"
-
-                date_received_str = enquiry[5]
-
-                if date_received_str:
-                    try:
-                        date_received = datetime.strptime(date_received_str, "%Y-%m-%d %H:%M:%S")
-                    except ValueError:
-                        date_received = datetime.strptime(date_received_str, "%Y-%m-%d")
-                    deadline = date_received + timedelta(days=10)
-                    days_remaining = (deadline - today).days
-
-                    if days_remaining < 0:
-                        deadline_status = "<span style='color:red;'>OVERDUE</span>"
-                    else:
-                        deadline_status = f"{days_remaining} days remaining"
-                else:
-                    deadline_status = "No date recorded"
-
-                html += f"""
-                <article class='item-card'>
-                    <p><strong>ID:</strong> {enquiry[0]}</p>
-                    <p><strong>Name:</strong> {enquiry[1]}</p>
-                    <p><strong>Email:</strong> {enquiry[2]}</p>
-                    <p><strong>Subject:</strong> {enquiry[3]}</p>
-                    <p><strong>Description:</strong> {enquiry[4]}</p>
-                    <p><strong>Date Received:</strong> {enquiry[5]}</p>
-                    <p><strong>Status:</strong> {enquiry[6]}</p>
-                    <p><strong>Deadline Status:</strong> {deadline_status}</p>
-                """
-
-                if assigned_dpo_id:
-                    html += f"""
-                    <p><strong>Assigned DPO:</strong> {dpo_name if dpo_name else 'Unknown'}</p>
-                    """
-                else:
-                    html += f"""
-                    <div class='item-actions'>
-                      <form method="POST" action="/assign_dpo">
-                          <input type="hidden" name="enquiry_id" value="{enquiry[0]}">
-                          <select name="dpo_id">
-                              {options}
-                          </select>
-                          <button type="submit">Assign DPO</button>
-                      </form>
-                    </div>
-                    """
-
-                html += "</article>"
-
-            html += "</section></main></div></body></html>"
-
             self.wfile.write(html.encode())
 
         elif self.path.startswith("/dpo"):
@@ -867,12 +933,99 @@ class MyHandler(BaseHTTPRequestHandler):
             conn = sqlite3.connect("odpc.db")
             cursor = conn.cursor()
 
+            cursor.execute("SELECT COUNT(*) FROM enquiries WHERE assigned_dpo_id = ? AND status != 'Completed'", (dpo_id,))
+            active_count = cursor.fetchone()[0] or 0
+            if active_count >= 3:
+                conn.close()
+                self.send_response(200)
+                self.send_header("Content-type", "text/html")
+                self.end_headers()
+                error_msg = f'<html><body><h3>This DPO already has {active_count} active enquiries and cannot take more.</h3><a href="/hod">Back to HOD Dashboard</a></body></html>'
+                self.wfile.write(error_msg.encode())
+                return
+
             cursor.execute("""
                 UPDATE enquiries
                 SET assigned_dpo_id = ?, status = 'Assigned'
                 WHERE id = ?
             """, (dpo_id, enquiry_id))
 
+            conn.commit()
+            conn.close()
+
+            self.send_response(303)
+            self.send_header("Location", "/hod")
+            self.end_headers()
+
+        elif self.path == "/hod_update_profile":
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = urllib.parse.parse_qs(post_data.decode())
+
+            hod_user_id = get_logged_in_user_id(self)
+            if not hod_user_id:
+                self.send_response(303)
+                self.send_header("Location", "/login")
+                self.end_headers()
+                return
+
+            name = data.get("name", [""])[0].strip()
+            email = data.get("email", [""])[0].strip()
+            if not name or not email:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"Name and email are required.")
+                return
+
+            conn = sqlite3.connect("odpc.db")
+            cursor = conn.cursor()
+            cursor.execute("UPDATE users SET name = ?, email = ? WHERE id = ? AND role = 'HOD'", (name, email, hod_user_id))
+            conn.commit()
+            conn.close()
+
+            self.send_response(303)
+            self.send_header("Location", "/hod")
+            self.end_headers()
+
+        elif self.path == "/hod_change_password":
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = urllib.parse.parse_qs(post_data.decode())
+
+            hod_user_id = get_logged_in_user_id(self)
+            if not hod_user_id:
+                self.send_response(303)
+                self.send_header("Location", "/login")
+                self.end_headers()
+                return
+
+            old_password = data.get("old_password", [""])[0]
+            new_password = data.get("new_password", [""])[0]
+            confirm_password = data.get("confirm_password", [""])[0]
+
+            if not old_password or not new_password or not confirm_password:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"All password fields are required.")
+                return
+
+            if new_password != confirm_password:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"New password and confirmation do not match.")
+                return
+
+            conn = sqlite3.connect("odpc.db")
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM users WHERE id = ? AND password = ? AND role = 'HOD'", (hod_user_id, old_password))
+            if not cursor.fetchone():
+                conn.close()
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"Current password is incorrect.")
+                return
+
+            cursor.execute("UPDATE users SET password = ? WHERE id = ?", (new_password, hod_user_id))
             conn.commit()
             conn.close()
 

@@ -7,24 +7,129 @@
     <title>HOD Dashboard</title>
 </head>
 <body>
-    <div class="page-shell">
-        <header class="header">
-            <img src="/logo.png" alt="ODPC logo" class="logo">
-            <h1>Head of Department Dashboard</h1>
+    <div class="hod-page">
+        <header class="hod-topbar">
+            <div class="hod-brand">
+                <img src="/logo.png" alt="ODPC logo" class="hod-logo">
+                <div>
+                    <p class="hod-eyebrow">Office of the Data Protection Commissioner</p>
+                    <h1>Head of Compliance Dashboard</h1>
+                </div>
+            </div>
+            <a href="/hod_logout" class="hod-logout-btn">Logout</a>
         </header>
 
-        <main class="container">
-            <section class="card">
-                <h2>Enquiries</h2>
-                <div id="enquiries" action="/hod">
-                    <!-- load enquiries dynamically -->
-                </div>
-            </section>
-        </main>
+        <div class="hod-layout">
+            <aside class="hod-sidebar">
+                <nav class="hod-nav">
+                    <button class="hod-nav-button active" data-tab="overview">Overview</button>
+                    <button class="hod-nav-button" data-tab="enquiries">Enquiries</button>
+                    <button class="hod-nav-button" data-tab="workload">DPO Workload</button>
+                    <button class="hod-nav-button" data-tab="profile">My Profile</button>
+                </nav>
+            </aside>
 
-        <footer class="footer">
-            © 2025 Office of the Data Protection Commissioner, Kenya
-        </footer>
+            <main class="hod-main">
+                <section id="overview" class="hod-panel">
+                    <div class="hod-card-grid" id="hod-stats-grid">
+                        <article class="hod-stat-card hod-new">
+                            <span class="hod-stat-label">New Enquiries</span>
+                            <strong class="hod-stat-value" id="stat-new">0</strong>
+                        </article>
+                        <article class="hod-stat-card hod-assigned">
+                            <span class="hod-stat-label">Assigned</span>
+                            <strong class="hod-stat-value" id="stat-assigned">0</strong>
+                        </article>
+                        <article class="hod-stat-card hod-completed">
+                            <span class="hod-stat-label">Completed</span>
+                            <strong class="hod-stat-value" id="stat-completed">0</strong>
+                        </article>
+                        <article class="hod-stat-card hod-total">
+                            <span class="hod-stat-label">Total Active</span>
+                            <strong class="hod-stat-value" id="stat-total-active">0</strong>
+                        </article>
+                    </div>
+                    <div class="hod-overview-copy">
+                        <p>Select a section from the menu to review enquiries, DPO workload, or profile settings.</p>
+                    </div>
+                </section>
+
+                <section id="enquiries" class="hod-panel hidden">
+                    <div class="hod-panel-header">
+                        <div>
+                            <h2>Enquiries</h2>
+                            <p>List view of all enquiries with assignment controls for available DPOs.</p>
+                        </div>
+                    </div>
+                    <div class="hod-table-wrap">
+                        <table class="hod-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Enquirer</th>
+                                    <th>Title</th>
+                                    <th>Description</th>
+                                    <th>Deadline</th>
+                                    <th>Status</th>
+                                    <th>Assign DPO</th>
+                                </tr>
+                            </thead>
+                            <tbody id="enquiries-tbody"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section id="workload" class="hod-panel hidden">
+                    <div class="hod-panel-header">
+                        <div>
+                            <h2>DPO Workload</h2>
+                            <p>See current DPO assignments, capacity, and status at a glance.</p>
+                        </div>
+                    </div>
+                    <div id="dpo-workload-list" class="hod-workload-list"></div>
+                </section>
+
+                <section id="profile" class="hod-panel hidden">
+                    <div class="hod-panel-header">
+                        <div>
+                            <h2>My Profile</h2>
+                            <p>Review your HOD contact details and update credentials.</p>
+                        </div>
+                    </div>
+                    <div class="hod-profile-grid">
+                        <div class="hod-profile-card">
+                            <h3>Profile Summary</h3>
+                            <dl>
+                                <dt>Name</dt>
+                                <dd id="profile-name">—</dd>
+                                <dt>Email</dt>
+                                <dd id="profile-email">—</dd>
+                            </dl>
+                        </div>
+                        <form class="hod-form" method="POST" action="/hod_update_profile">
+                            <h3>Edit Information</h3>
+                            <label for="hod-name">Name</label>
+                            <input id="hod-name" name="name" type="text" required>
+                            <label for="hod-email">Email</label>
+                            <input id="hod-email" name="email" type="email" required>
+                            <button type="submit">Save Profile</button>
+                        </form>
+                        <form class="hod-form" method="POST" action="/hod_change_password">
+                            <h3>Change Password</h3>
+                            <label for="hod-old-password">Current Password</label>
+                            <input id="hod-old-password" name="old_password" type="password" required>
+                            <label for="hod-new-password">New Password</label>
+                            <input id="hod-new-password" name="new_password" type="password" required>
+                            <label for="hod-confirm-password">Confirm Password</label>
+                            <input id="hod-confirm-password" name="confirm_password" type="password" required>
+                            <button type="submit">Change Password</button>
+                        </form>
+                    </div>
+                </section>
+            </main>
+        </div>
     </div>
+
+    <script src="/main.js" defer></script>
 </body>
 </html>
