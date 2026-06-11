@@ -22,7 +22,13 @@
         <div class="hod-layout">
             <aside class="hod-sidebar">
                 <nav class="hod-nav">
-                    <button class="hod-nav-button active" data-tab="assigned-enquiries">Assigned Enquiries</button>
+                    <button class="hod-nav-button active" data-tab="assigned-enquiries">
+                        Assigned Enquiries
+                    </button>
+
+                    <button class="hod-nav-button" data-tab="my-profile">
+                        My Profile
+                    </button>
                 </nav>
             </aside>
 
@@ -45,6 +51,89 @@
                         {{dpo_enquiries}}
                     </div>
                 </section>
+                <section id="my-profile" class="hod-panel hidden">
+
+    <div class="hod-panel-header">
+        <div>
+            <h2>My Profile</h2>
+            <p>Manage your account information and password.</p>
+        </div>
+    </div>
+
+    <div class="hod-profile-grid">
+
+        <div class="hod-card">
+            <h3>Profile Information</h3>
+
+            <p>
+                <strong>Name:</strong>
+                <span id="dpo-profile-name">Loading...</span>
+            </p>
+
+            <p>
+                <strong>Email:</strong>
+                <span id="dpo-profile-email">Loading...</span>
+            </p>
+        </div>
+
+        <div class="hod-card">
+            <h3>Update Profile</h3>
+
+            <form method="POST" action="/dpo_update_profile">
+
+                <label>Name</label>
+                <input
+                    type="text"
+                    id="dpo-name"
+                    name="name"
+                    required
+                >
+
+                <label>Email</label>
+                <input
+                    type="email"
+                    id="dpo-email"
+                    name="email"
+                    required
+                >
+
+                <button type="submit">
+                    Save Changes
+                </button>
+
+            </form>
+        </div>
+
+        <div class="hod-card">
+            <h3>Change Password</h3>
+
+            <form method="POST" action="/dpo_change_password">
+
+                <label>Current Password</label>
+                <input type="password"
+                       name="old_password"
+                       required>
+
+                <label>New Password</label>
+                <input type="password"
+                       name="new_password"
+                       required>
+
+                <label>Confirm Password</label>
+                <input type="password"
+                       name="confirm_password"
+                       required>
+
+                <button type="submit">
+                    Change Password
+                </button>
+
+            </form>
+        </div>
+
+    </div>
+
+</section>
             </main>
              
         </div>

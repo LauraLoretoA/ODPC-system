@@ -473,7 +473,12 @@ class MyHandler(BaseHTTPRequestHandler):
 
             conn = sqlite3.connect("odpc.db")
             cursor = conn.cursor()
+            cursor.execute(
+                "SELECT name, email FROM users WHERE id=?",
+                (user_id,)
+            )
 
+            profile = cursor.fetchone()
             cursor.execute("""
                 SELECT
                     enquiries.id,
@@ -565,11 +570,36 @@ class MyHandler(BaseHTTPRequestHandler):
                     dpo_enquiries_html += "</article>"
             else:
                 dpo_enquiries_html = "<div class='hod-empty-state'>No assigned enquiries.</div>"
+            
+            profile_name = profile[0] if profile else ""
+            profile_email = profile[1] if profile else ""
 
             with open("Pages/dpo_dashboard.html", "r", encoding="utf-8") as file:
                 html = file.read()
 
             html = html.replace("{{dpo_enquiries}}", dpo_enquiries_html)
+
+            html = html.replace(
+                "Loading...</span>",
+                f"{profile_name}</span>",
+                1
+            )
+
+            html = html.replace(
+                "Loading...</span>",
+                f"{profile_email}</span>",
+                1
+            )
+
+            html = html.replace(
+                'id="dpo-name"',
+                f'id="dpo-name" value="{profile_name}"'
+            )
+
+            html = html.replace(
+                'id="dpo-email"',
+                 f'id="dpo-email" value="{profile_email}"'
+            )
 
             self.send_response(200)
             self.send_header("Content-type", "text/html")
@@ -1379,6 +1409,120 @@ Unverified account or invalid credentials. Contact admin for approval.
             self.send_response(303)
             self.send_header("Set-Cookie", "enquirer_id=; expires=Thu, 01 Jan 1970 00:00:00 GMT")
             self.send_header("Location", "/")
+            self.end_headers()
+        elif self.path == "/dpo_update_profile":
+
+            content_length = int(
+                self.headers['Content-Length']
+            )
+
+            post_data = self.rfile.read(content_length)
+
+            data = urllib.parse.parse_qs(
+                post_data.decode()
+            )
+
+            user_id = get_logged_in_user_id(self)
+
+            name = data.get("name")[0]
+            email = data.get("email")[0]
+
+            conn = sqlite3.connect("odpc.db")
+            cursor = conn.cursor()
+
+            cursor.execute(
+                """
+                UPDATE users
+                SET name=?, email=?
+                WHERE id=?
+                """,
+                (name, email, user_id)
+            )
+
+            conn.commit()
+            conn.close()
+
+            self.send_response(303)
+            self.send_header("Location", "/dpo")
+            self.end_headers()
+        elif self.path == "/dpo_change_password":
+
+            content_length = int(
+                self.headers['Content-Length']
+            )
+
+            post_data = self.rfile.read(content_length)
+
+            data = urllib.parse.parse_qs(
+                post_data.decode()
+            )
+
+            user_id = get_logged_in_user_id(self)
+
+            old_password = data.get(
+                "old_password"
+            )[0]
+
+            new_password = data.get(
+                "new_password"
+            )[0]
+
+            confirm_password = data.get(
+                "confirm_password"
+            )[0]
+
+            if new_password != confirm_password:
+
+                self.send_response(200)
+                self.end_headers()
+
+                self.wfile.write(
+                    b"Passwords do not match"
+                )
+
+                return
+
+            conn = sqlite3.connect("odpc.db")
+            cursor = conn.cursor()
+
+            cursor.execute(
+                """
+                SELECT password
+                FROM users
+                WHERE id=?
+                """,
+                (user_id,)
+            )
+
+            result = cursor.fetchone()
+
+            if not result or result[0] != old_password:
+
+                conn.close()
+
+                self.send_response(200)
+                self.end_headers()
+
+                self.wfile.write(
+                    b"Current password incorrect"
+                )
+
+                return
+
+            cursor.execute(
+                """
+                UPDATE users
+                SET password=?
+                WHERE id=?
+                """,
+                (new_password, user_id)
+            )
+
+            conn.commit()
+            conn.close()
+
+            self.send_response(303)
+            self.send_header("Location", "/dpo")
             self.end_headers()
 
 def run():
