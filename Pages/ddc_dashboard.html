@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DDC Dashboard</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="hod-page">
+        <header class="hod-topbar">
+            <div class="hod-brand">
+                <img src="/logo.png" alt="ODPC logo" class="hod-logo">
+                <div>
+                    <p class="hod-eyebrow">Office of the Data Protection Commissioner</p>
+                    <h1>DDC Review Dashboard</h1>
+                </div>
+            </div>
+            <a href="/login" class="hod-logout-btn">Logout</a>
+        </header>
+
+        <div class="hod-layout">
+            <aside class="hod-sidebar">
+                <nav class="hod-nav">
+                    <button class="hod-nav-button active" data-tab="review-advisories">Advisories for Review</button>
+                </nav>
+            </aside>
+
+            <main class="hod-main">
+                <section id="review-advisories" class="hod-panel">
+                    <div class="hod-panel-header">
+                        <div>
+                            <h2>Advisories for Review</h2>
+                            <p>Review submitted draft advisories and either approve or return them for revision.</p>
+                        </div>
+                    </div>
+
+                    <div class="hod-workload-list">
+                        {{ddc_advisories}}
+                    </div>
+                </section>
+            </main>
+        </div>
+         <footer class="footer">
+            © 2025 Office of the Data Protection Commissioner, Kenya
+        </footer>
+    </div>
+
+    <script src="/main.js" defer></script>
+</body>
+</html>

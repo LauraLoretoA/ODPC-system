@@ -447,92 +447,81 @@ class MyHandler(BaseHTTPRequestHandler):
             enquiries = cursor.fetchall()
             conn.close()
 
+            today = datetime.today()
+            dpo_enquiries_html = ""
+
+            if enquiries:
+                for enquiry in enquiries:
+                    review_status = enquiry[7]
+                    review_comment = enquiry[8]
+                    advisory_title = enquiry[9]
+                    file_path = enquiry[10]
+                    date_received_str = enquiry[5]
+
+                    if date_received_str:
+                        try:
+                            date_received = datetime.strptime(date_received_str, "%Y-%m-%d %H:%M:%S")
+                        except ValueError:
+                            date_received = datetime.strptime(date_received_str, "%Y-%m-%d")
+
+                        deadline = date_received + timedelta(days=10)
+                        days_remaining = (deadline - today).days
+
+                        if days_remaining < 0:
+                            deadline_status = "<span style='color:red;'>OVERDUE</span>"
+                        else:
+                            deadline_status = f"{days_remaining} days remaining"
+                    else:
+                        deadline_status = "No date recorded"
+
+                    dpo_enquiries_html += f"""
+                    <article class='hod-workload-card'>
+                        <div class='hod-workload-card-header'>
+                            <div>
+                                <h3>{enquiry[3]}</h3>
+                                <p class='hod-small-text'>Enquiry #{enquiry[0]}</p>
+                            </div>
+                            <span class='hod-badge hod-status-available'>{enquiry[6]}</span>
+                        </div>
+
+                        <p><strong>Enquirer:</strong> {enquiry[1]} ({enquiry[2]})</p>
+                        <p><strong>Description:</strong> {enquiry[4]}</p>
+                        <p><strong>Date Received:</strong> {enquiry[5]}</p>
+                        <p><strong>Deadline:</strong> {deadline_status}</p>
+                        <p><strong>Review Status:</strong> {review_status if review_status else "Not reviewed"}</p>
+                        <p><strong>Comment:</strong> {review_comment if review_comment else "None"}</p>
+                    """
+
+                    if advisory_title:
+                        dpo_enquiries_html += f"<p><strong>Advisory Title:</strong> {advisory_title}</p>"
+
+                    if file_path:
+                        dpo_enquiries_html += f"<p><strong>Attachment:</strong> <a href='/download/{file_path}' target='_blank'>{file_path}</a></p>"
+
+                    if not review_status or review_status == "Needs Revision":
+                        dpo_enquiries_html += f"""
+                        <div class='item-actions'>
+                            <form method="GET" action="/draft_advisory">
+                                <input type="hidden" name="enquiry_id" value="{enquiry[0]}">
+                                <button type="submit">Draft / Redraft Advisory</button>
+                            </form>
+                        </div>
+                        """
+                    elif review_status == "Approved":
+                        dpo_enquiries_html += "<p style='color:green;'><strong>Approved</strong></p>"
+
+                    dpo_enquiries_html += "</article>"
+            else:
+                dpo_enquiries_html = "<div class='hod-empty-state'>No assigned enquiries.</div>"
+
+            with open("Pages/dpo_dashboard.html", "r", encoding="utf-8") as file:
+                html = file.read()
+
+            html = html.replace("{{dpo_enquiries}}", dpo_enquiries_html)
+
             self.send_response(200)
             self.send_header("Content-type", "text/html")
             self.end_headers()
-
-            html = """
-            <html lang='en'>
-            <head>
-              <meta charset='UTF-8'>
-              <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-              <title>DPO Dashboard</title>
-              <link rel='stylesheet' href='/style.css'>
-            </head>
-            <body>
-              <div class='page-shell'>
-                <header class='header'>
-                  <img src='/logo.png' class='logo' alt='ODPC logo'>
-                  <h1>DPO Dashboard</h1>
-                </header>
-                <main class='container'>
-                  <section class='card'>
-                    <h2>Assigned Enquiries</h2>
-            """
-
-            today = datetime.today()
-
-            for enquiry in enquiries:
-                # 0=id, 1=name, 2=email, 3=subject, 4=description, 5=date_received, 6=status,
-                # 7=review_status, 8=review_comment, 9=advisory_title, 10=file_path, 11=draft_content
-                review_status = enquiry[7]
-                review_comment = enquiry[8]
-                advisory_title = enquiry[9]
-                file_path = enquiry[10]
-                date_received_str = enquiry[5]
-
-                if date_received_str:
-                    try:
-                        date_received = datetime.strptime(date_received_str, "%Y-%m-%d %H:%M:%S")
-                    except ValueError:
-                        date_received = datetime.strptime(date_received_str, "%Y-%m-%d")
-                    deadline = date_received + timedelta(days=10)
-                    days_remaining = (deadline - today).days
-
-                    if days_remaining < 0:
-                        deadline_status = "<span style='color:red;'>OVERDUE</span>"
-                    else:
-                        deadline_status = f"{days_remaining} days remaining"
-                else:
-                    deadline_status = "No date recorded"
-
-                html += f"""
-                <article class='item-card'>
-                    <p><strong>ID:</strong> {enquiry[0]}</p>
-                    <p><strong>Name:</strong> {enquiry[1]}</p>
-                    <p><strong>Email:</strong> {enquiry[2]}</p>
-                    <p><strong>Subject:</strong> {enquiry[3]}</p>
-                    <p><strong>Description:</strong> {enquiry[4]}</p>
-                    <p><strong>Date Received:</strong> {enquiry[5]}</p>
-                    <p><strong>Status:</strong> {enquiry[6]}</p>
-                    <p><strong>Deadline:</strong> {deadline_status}</p>
-
-                    <p><strong>Review Status:</strong> {review_status if review_status else "Not reviewed"}</p>
-                    <p><strong>Comment:</strong> {review_comment if review_comment else "None"}</p>
-                """
-
-                if advisory_title:
-                    html += f"<p><strong>Advisory Title:</strong> {advisory_title}</p>"
-                if file_path:
-                    html += f"<p><strong>Attachment:</strong> <a href='/download/{file_path}' target='_blank'>{file_path}</a></p>"
-
-                if not review_status or review_status == "Needs Revision":
-                    html += f"""
-                    <div class='item-actions'>
-                      <form method="GET" action="/draft_advisory">
-                          <input type="hidden" name="enquiry_id" value="{enquiry[0]}">
-                          <button type="submit">Draft / Redraft Advisory</button>
-                      </form>
-                    </div>
-                    """
-
-                elif review_status == "Approved":
-                    html += "<p style='color:green;'><strong>Approved</strong></p>"
-
-                html += "</article>"
-
-            html += "</section></main></div></body></html>"
-
             self.wfile.write(html.encode())
 
         elif self.path.startswith("/draft_advisory"):
@@ -618,67 +607,56 @@ class MyHandler(BaseHTTPRequestHandler):
             advisories = cursor.fetchall()
             conn.close()
 
+            ddc_advisories_html = ""
+
+            if advisories:
+                for adv in advisories:
+                    file_link = ""
+                    if adv[8]:
+                        file_link = f"<p><strong>Attachment:</strong> <a href='/download/{adv[8]}' target='_blank'>{adv[8]}</a></p>"
+
+                    title_display = f"<p><strong>Advisory Title:</strong> {adv[7]}</p>" if adv[7] else ""
+
+                    ddc_advisories_html += f"""
+                    <article class='hod-workload-card'>
+                        <div class='hod-workload-card-header'>
+                            <div>
+                                <h3>{adv[1]}</h3>
+                                <p class='hod-small-text'>Advisory #{adv[0]}</p>
+                            </div>
+                            <span class='hod-badge hod-status-available'>{adv[5] if adv[5] else "Pending"}</span>
+                        </div>
+
+                        {title_display}
+                        <p><strong>Description:</strong> {adv[2]}</p>
+                        <p><strong>Draft:</strong><br>{adv[3]}</p>
+                        <p><strong>Final:</strong><br>{adv[4] if adv[4] else "Not approved yet"}</p>
+                        {file_link}
+                        <p><strong>Comment:</strong> {adv[6] if adv[6] else "None"}</p>
+
+                        <div class='item-actions'>
+                            <form method="POST" action="/review_advisory">
+                                <input type="hidden" name="advisory_id" value="{adv[0]}">
+                                <textarea name="comment" placeholder="Enter review comment"></textarea>
+                                <div class='item-actions'>
+                                <button name="action" value="approve">Approve</button>
+                                <button name="action" value="revise">Send Back</button>
+                        </div>
+                    </form>
+                </div>
+            </article>
+            """
+            else:
+                ddc_advisories_html = "<div class='hod-empty-state'>No advisories pending review.</div>"
+
+            with open("Pages/ddc_dashboard.html", "r", encoding="utf-8") as file:
+                html = file.read()
+
+            html = html.replace("{{ddc_advisories}}", ddc_advisories_html)
+
             self.send_response(200)
             self.send_header("Content-type", "text/html")
             self.end_headers()
-
-            html = """
-            <html lang='en'>
-            <head>
-              <meta charset='UTF-8'>
-              <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-              <title>DDC Dashboard</title>
-              <link rel='stylesheet' href='/style.css'>
-            </head>
-            <body>
-              <div class='page-shell'>
-                <header class='header'>
-                  <img src='/logo.png' class='logo' alt='ODPC logo'>
-                  <h1>DDC Review Dashboard</h1>
-                </header>
-                <main class='container'>
-                  <section class='card'>
-                    <h2>Advisories for Review</h2>
-            """
-
-            for adv in advisories:
-                # 0=id, 1=subject, 2=description, 3=draft, 4=final, 5=status, 6=comment, 7=title, 8=file_path
-
-                file_link = ""
-                if adv[8]:
-                    file_link = f"<p><strong>Attachment:</strong> <a href='/download/{adv[8]}' target='_blank'>{adv[8]}</a></p>"
-
-                title_display = f"<p><strong>Advisory Title:</strong> {adv[7]}</p>" if adv[7] else ""
-
-                html += f"""
-                <article class='item-card'>
-                    <p><strong>Advisory ID:</strong> {adv[0]}</p>
-                    {title_display}
-                    <p><strong>Subject:</strong> {adv[1]}</p>
-                    <p><strong>Description:</strong> {adv[2]}</p>
-
-                    <p><strong>Draft:</strong><br>{adv[3]}</p>
-                    <p><strong>Final:</strong><br>{adv[4] if adv[4] else "Not approved yet"}</p>
-                    {file_link}
-
-                    <p><strong>Status:</strong> {adv[5] if adv[5] else "Pending"}</p>
-                    <p><strong>Comment:</strong> {adv[6] if adv[6] else "None"}</p>
-
-                    <div class='item-actions'>
-                      <form method="POST" action="/review_advisory">
-                          <input type="hidden" name="advisory_id" value="{adv[0]}">
-                          <textarea name="comment" placeholder="Enter review comment"></textarea>
-                          <div class='item-actions'>
-                            <button name="action" value="approve">Approve</button>
-                            <button name="action" value="revise">Send Back</button>
-                          </div>
-                      </form>
-                    </div>
-                </article>
-                """
-
-            html += "</section></main></div></body></html>"
-
             self.wfile.write(html.encode())
 
         elif self.path == "/enquirer_register":
