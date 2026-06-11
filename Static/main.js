@@ -139,7 +139,37 @@ function renderProfile(state) {
     document.getElementById('hod-name').value = state.profile.name || '';
     document.getElementById('hod-email').value = state.profile.email || '';
 }
+function filterEnquiries(status) {
+    const rows = document.querySelectorAll("#enquiries-tbody tr");
 
+    rows.forEach(row => {
+        if (status === "all") {
+            row.style.display = "";
+            return;
+        }
+
+        const statusCell = row.children[5];
+
+        if (!statusCell) return;
+
+        row.style.display =
+            statusCell.textContent.trim() === status ? "" : "none";
+    });
+}
+function filterCards(status) {
+    const cards = document.querySelectorAll(".hod-workload-card");
+
+    cards.forEach(card => {
+        const cardStatus = card.dataset.status;
+
+        if (status === "all") {
+            card.style.display = "";
+            return;
+        }
+
+        card.style.display = cardStatus === status ? "" : "none";
+    });
+}
 window.addEventListener('DOMContentLoaded', () => {
     // Sidebar tabs for Admin, HOD, DPO, and DDC dashboards
     document.querySelectorAll('.hod-nav-button').forEach(button => {

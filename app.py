@@ -188,6 +188,13 @@ class MyHandler(BaseHTTPRequestHandler):
             """)
 
             pending_enquirers = cursor.fetchall()
+            cursor.execute("""
+                SELECT id, name, email, role
+                FROM users
+                ORDER BY role, name
+                """)
+            users = cursor.fetchall()
+
             print(f"DEBUG ADMIN: Found {len(pending_enquirers)} pending enquirers: {pending_enquirers}")
             conn.close()
 
@@ -245,8 +252,51 @@ class MyHandler(BaseHTTPRequestHandler):
             print(f"DEBUG ADMIN: Generated pending_html length: {len(pending_html)}")
             print(f"DEBUG ADMIN: pending_html preview: {pending_html[:200]}...")
 
-            
+            users_html = ""
+
+            if users:
+                users_html += """
+                <div class="hod-table-wrap">
+                    <table class="hod-table">
+                   <thead>
+                       <tr>
+                           <th>ID</th>
+                           <th>Name</th>
+                           <th>Email</th>
+                           <th>Role</th>
+                           <th>Action</th>
+                       </tr>
+                   </thead>
+                   <tbody>
+                """
+
+                for user in users:
+                    user_id, name, email, role = user
+                    users_html += f"""
+                        <tr>
+                            <td>{user_id}</td>
+                            <td>{name}</td>
+                            <td>{email}</td>
+                            <td>{role}</td>
+                            <td>
+                                <form method="POST" action="/delete_user" onsubmit="return confirm('Are you sure you want to delete this user?');">
+                                    <input type="hidden" name="user_id" value="{user_id}">
+                                    <button type="submit" style="background:red;">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                    """
+
+                users_html += """
+                        </tbody>
+                    </table>
+                </div>
+                """
+            else:
+                users_html = "<p>No internal users found.</p>"
+
             html = html.replace('<div id="pending-enquirers-list"></div>', pending_html)
+            html = html.replace('<div id="users-list"></div>', users_html)
     
             print(f"DEBUG ADMIN: Final HTML length: {len(html)}")
 
@@ -474,8 +524,10 @@ class MyHandler(BaseHTTPRequestHandler):
                     else:
                         deadline_status = "No date recorded"
 
+                    card_status = review_status if review_status else "Not reviewed"
+
                     dpo_enquiries_html += f"""
-                    <article class='hod-workload-card'>
+                    <article class='hod-workload-card' data-status="{card_status}">
                         <div class='hod-workload-card-header'>
                             <div>
                                 <h3>{enquiry[3]}</h3>
@@ -825,7 +877,27 @@ class MyHandler(BaseHTTPRequestHandler):
             self.send_response(303)
             self.send_header("Location", "/admin")
             self.end_headers()
-           
+
+        #DELETE USER LOGIC (ADMIN)
+        elif self.path == "/delete_user":
+
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = urllib.parse.parse_qs(post_data.decode())
+
+            user_id = data.get("user_id")[0]
+
+            conn = sqlite3.connect("odpc.db")
+            cursor = conn.cursor()
+
+            cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+
+            conn.commit()
+            conn.close()
+
+            self.send_response(303)
+            self.send_header("Location", "/admin")
+            self.end_headers()   
 
         # VERIFY ENQUIRER (ADMIN)
         elif self.path == "/verify_enquirer":
