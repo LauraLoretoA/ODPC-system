@@ -7,52 +7,73 @@
     <title>Admin Dashboard</title>
 </head>
 <body>
-    <div class="page-shell">
-        <header class="header">
-            <img src="/logo.png" alt="ODPC logo" class="logo">
-            <h1>Admin Dashboard</h1>
+    <div class="hod-page">
+        <header class="hod-topbar">
+            <div class="hod-brand">
+                <img src="/logo.png" alt="ODPC logo" class="hod-logo">
+                <div>
+                    <p class="hod-eyebrow">Office of the Data Protection Commissioner</p>
+                    <h1>System Administrator Dashboard</h1>
+                </div>
+            </div>
+            <a href="/login" class="hod-logout-btn">Logout</a>
         </header>
 
-        <main class="container">
-            <section class="card">
-                <h2>Create New User</h2>
-                <form method="POST" action="/create_user">
-                    <div>
+        <div class="hod-layout">
+            <aside class="hod-sidebar">
+                <nav class="hod-nav">
+                    <button class="hod-nav-button active" data-tab="create-user">Create User</button>
+                    <button class="hod-nav-button" data-tab="pending-enquirers">Pending Enquirers</button>
+                </nav>
+            </aside>
+
+            <main class="hod-main">
+                <section id="create-user" class="hod-panel">
+                    <div class="hod-panel-header">
+                        <div>
+                            <h2>Create New Internal User</h2>
+                            <p>Create HOD, DPO, or DDC accounts for internal system users.</p>
+                        </div>
+                    </div>
+
+                    <form class="hod-form" method="POST" action="/create_user">
                         <label for="name">Name</label>
                         <input id="name" type="text" name="name" required>
-                    </div>
 
-                    <div>
                         <label for="email">Email</label>
                         <input id="email" type="email" name="email" required>
-                    </div>
 
-                    <div>
                         <label for="password">Password</label>
                         <input id="password" type="password" name="password" required>
-                    </div>
 
-                    <div>
                         <label for="role">Role</label>
                         <select id="role" name="role" required>
                             <option value="HOD">HOD</option>
                             <option value="DPO">DPO</option>
                             <option value="DDC">DDC</option>
                         </select>
+
+                        <button type="submit">Create User</button>
+                    </form>
+                </section>
+
+                <section id="pending-enquirers" class="hod-panel hidden">
+                    <div class="hod-panel-header">
+                        <div>
+                            <h2>Pending Enquirer Profiles</h2>
+                            <p>Review, approve, or reject external enquirer registrations.</p>
+                        </div>
                     </div>
 
-<button type="submit">Create User</button>
-                </form>
-                <section class="card">
-                    
                     <div id="pending-enquirers-list"></div>
                 </section>
-            </section>
-        </main>
-
+            </main>
+        </div>
         <footer class="footer">
             © 2025 Office of the Data Protection Commissioner, Kenya
         </footer>
     </div>
+
+    <script src="/main.js" defer></script>
 </body>
 </html>

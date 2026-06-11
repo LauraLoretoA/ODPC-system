@@ -2,6 +2,7 @@ function selectTab(tabName) {
     document.querySelectorAll('.hod-nav-button').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.tab === tabName);
     });
+
     document.querySelectorAll('.hod-panel').forEach(panel => {
         panel.classList.toggle('hidden', panel.id !== tabName);
     });
@@ -53,12 +54,14 @@ function renderEnquiries(state) {
             const select = document.createElement('select');
             select.name = 'dpo_id';
             select.required = true;
+
             state.availableDpos.forEach(dpo => {
                 const option = document.createElement('option');
                 option.value = dpo.id;
                 option.textContent = `${dpo.name} (${dpo.activeCount} active)`;
                 select.appendChild(option);
             });
+
             form.appendChild(select);
 
             const button = document.createElement('button');
@@ -71,12 +74,17 @@ function renderEnquiries(state) {
 
         tr.innerHTML = `
             <td>${enquiry.id}</td>
-            <td>${formatText(enquiry.enquirer_name)}<br><span class="hod-small-text">${formatText(enquiry.enquirer_email)}</span></td>
+            <td>
+                ${formatText(enquiry.enquirer_name)}
+                <br>
+                <span class="hod-small-text">${formatText(enquiry.enquirer_email)}</span>
+            </td>
             <td>${formatText(enquiry.title)}</td>
             <td>${formatText(enquiry.description)}</td>
             <td>${formatText(enquiry.deadline)}</td>
             <td>${formatText(enquiry.status)}</td>
         `;
+
         tr.appendChild(assignCell);
         tbody.appendChild(tr);
     });
@@ -94,21 +102,33 @@ function renderWorkload(state) {
     state.dpoWorkloads.forEach(dpo => {
         const card = document.createElement('article');
         card.className = 'hod-workload-card';
+
         card.innerHTML = `
             <div class="hod-workload-card-header">
                 <div>
                     <h3>${dpo.name}</h3>
                     <p class="hod-small-text">${dpo.email}</p>
                 </div>
-                <span class="hod-badge ${dpo.statusBadgeClass}">${dpo.statusBadgeText}</span>
+                <span class="hod-badge ${dpo.statusBadgeClass}">
+                    ${dpo.statusBadgeText}
+                </span>
             </div>
+
             <div class="hod-workload-meta">
                 <strong>${dpo.activeCount}</strong> active enquiries
             </div>
+
             <div class="hod-workload-list-items">
-                ${dpo.assignedTitles.length ? dpo.assignedTitles.map((title, index) => `<p><strong>#${dpo.assignedEnquiryIds[index]}:</strong> ${title}</p>`).join('') : '<p class="hod-small-text">No active assignments.</p>'}
+                ${
+                    dpo.assignedTitles.length
+                        ? dpo.assignedTitles.map((title, index) =>
+                            `<p><strong>#${dpo.assignedEnquiryIds[index]}:</strong> ${title}</p>`
+                          ).join('')
+                        : '<p class="hod-small-text">No active assignments.</p>'
+                }
             </div>
         `;
+
         container.appendChild(card);
     });
 }
@@ -121,22 +141,22 @@ function renderProfile(state) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    const state = window.__HOD_STATE__ || {
-        stats: { new: 0, assigned: 0, completed: 0, totalActive: 0 },
-        enquiries: [],
-        dpoWorkloads: [],
-        availableDpos: [],
-        profile: { name: '', email: '' }
-    };
-
-    renderStats(state);
-    renderEnquiries(state);
-    renderWorkload(state);
-    renderProfile(state);
-
+    // Sidebar tabs for Admin, HOD, DPO, and DDC dashboards
     document.querySelectorAll('.hod-nav-button').forEach(button => {
         button.addEventListener('click', () => {
             selectTab(button.dataset.tab);
         });
     });
+
+    // Only HOD dashboard has this backend-injected state
+    if (!window.__HOD_STATE__) {
+        return;
+    }
+
+    const state = window.__HOD_STATE__;
+
+    renderStats(state);
+    renderEnquiries(state);
+    renderWorkload(state);
+    renderProfile(state);
 });
