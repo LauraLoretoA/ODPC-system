@@ -84,7 +84,7 @@ def create_tables():
     )
     """)
 
-    # Add new columns if they don't exist (SQLite doesn't support IF NOT EXISTS for ALTER)
+    # Add new columns if they don't exist 
     try:
         cursor.execute("ALTER TABLE advisories ADD COLUMN file_path TEXT")
     except sqlite3.OperationalError:
@@ -136,6 +136,13 @@ def create_tables():
     except sqlite3.OperationalError:
         pass  # Column already exists
 
+    try:
+        cursor.execute("""
+            ALTER TABLE activity_logs
+            ADD COLUMN enquirer_id INTEGER
+        """)
+    except sqlite3.OperationalError:
+        pass
 
     conn.commit()
     conn.close()

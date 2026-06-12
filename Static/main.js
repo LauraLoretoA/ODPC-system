@@ -170,7 +170,40 @@ function filterCards(status) {
         card.style.display = cardStatus === status ? "" : "none";
     });
 }
+function showToastFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    const success = params.get("success");
+    const error = params.get("error");
+
+    if (!success && !error) return;
+
+    const message = success || error;
+    const type = success ? "success" : "error";
+
+    const toast = document.createElement("div");
+    toast.className = `toast-message toast-${type}`;
+    toast.textContent = message;
+
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        toast.classList.add("show");
+    }, 100);
+
+    setTimeout(() => {
+        toast.classList.remove("show");
+
+        const cleanURL = window.location.pathname;
+        window.history.replaceState({}, document.title, cleanURL);
+
+        setTimeout(() => {
+            toast.remove();
+        }, 300);
+    }, 3000);
+}
+
 window.addEventListener('DOMContentLoaded', () => {
+    showToastFromURL();
     // Sidebar tabs for Admin, HOD, DPO, and DDC dashboards
     document.querySelectorAll('.hod-nav-button').forEach(button => {
         button.addEventListener('click', () => {
@@ -178,7 +211,7 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Only HOD dashboard has this backend-injected state
+    //HOD dashboardbackend-injected state
     if (!window.__HOD_STATE__) {
         return;
     }

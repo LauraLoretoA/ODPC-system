@@ -23,6 +23,7 @@
             <aside class="hod-sidebar">
                 <nav class="hod-nav">
                     <button class="hod-nav-button active" data-tab="review-advisories">Advisories for Review</button>
+                    <button class="hod-nav-button" data-tab="my-profile">My Profile</button>
                 </nav>
             </aside>
 
@@ -38,6 +39,49 @@
                     <div class="hod-workload-list">
                         {{ddc_advisories}}
                     </div>
+                </section>
+                <section id="my-profile" class="hod-panel hidden">
+                  <div class="hod-panel-header">
+                    <div>
+                        <h2>My Profile</h2>
+                        <p>Manage your account information and password.</p>
+                    </div>
+                  </div>
+
+                  <div class="hod-profile-grid">
+                    <div class="hod-profile-card">
+                        <h3>Profile Information</h3>
+                        <p><strong>Name:</strong> <span id="ddc-profile-name">Loading...</span></p>
+                        <p><strong>Email:</strong> <span id="ddc-profile-email">Loading...</span></p>
+                    </div>
+
+                    <form class="hod-form" method="POST" action="/ddc_update_profile">
+                        <h3>Update Profile</h3>
+
+                        <label for="ddc-name">Name</label>
+                        <input id="ddc-name" type="text" name="name" required>
+
+                        <label for="ddc-email">Email</label>
+                        <input id="ddc-email" type="email" name="email" required>
+
+                        <button type="submit">Save Changes</button>
+                    </form>
+
+                    <form class="hod-form" method="POST" action="/ddc_change_password">
+                        <h3>Change Password</h3>
+
+                        <label>Current Password</label>
+                    <input type="password" name="old_password" required>
+
+                    <label>New Password</label>
+                    <input type="password" name="new_password" required>
+
+                    <label>Confirm Password</label>
+                    <input type="password" name="confirm_password" required>
+
+                    <button type="submit">Change Password</button>
+                    </form>
+                  </div>
                 </section>
             </main>
         </div>

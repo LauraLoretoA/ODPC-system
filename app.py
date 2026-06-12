@@ -7,6 +7,28 @@ import mimetypes
 
 
 from Extras.auth import get_logged_in_enquirer_id
+def log_activity(user_id, action):
+
+    conn = sqlite3.connect("odpc.db")
+    cursor = conn.cursor()
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    cursor.execute("""
+        INSERT INTO activity_logs (
+            user_id,
+            action,
+            timestamp
+        )
+        VALUES (?, ?, ?)
+    """, (
+        user_id,
+        action,
+        timestamp
+    ))
+
+    conn.commit()
+    conn.close()
 
 def get_logged_in_user_id(handler):
     cookie = handler.headers.get('Cookie')
@@ -167,7 +189,7 @@ class MyHandler(BaseHTTPRequestHandler):
                 self.wfile.write(file.read().encode())
 
 # Admin Dashboard - Pending Enquirers for verification
-        elif self.path == "/admin":
+        elif self.path.startswith("/admin"):
             conn = sqlite3.connect("odpc.db")
             cursor = conn.cursor()
             cursor.execute("""
@@ -669,6 +691,13 @@ class MyHandler(BaseHTTPRequestHandler):
 
             conn = sqlite3.connect("odpc.db")
             cursor = conn.cursor()
+            user_id = get_logged_in_user_id(self)
+
+            cursor.execute(
+                "SELECT name, email FROM users WHERE id=?",
+                (user_id,)
+            )
+            profile = cursor.fetchone()
 
             cursor.execute("""
                 SELECT
@@ -730,24 +759,38 @@ class MyHandler(BaseHTTPRequestHandler):
             """
             else:
                 ddc_advisories_html = "<div class='hod-empty-state'>No advisories pending review.</div>"
+            profile_name = profile[0] if profile else ""
+            profile_email = profile[1] if profile else ""
 
             with open("Pages/ddc_dashboard.html", "r", encoding="utf-8") as file:
                 html = file.read()
 
             html = html.replace("{{ddc_advisories}}", ddc_advisories_html)
+            html = html.replace("Loading...</span>", f"{profile_name}</span>", 1)
+            html = html.replace("Loading...</span>", f"{profile_email}</span>", 1)
+
+            html = html.replace(
+                'id="ddc-name"',
+                f'id="ddc-name" value="{profile_name}"'
+            )
+
+            html = html.replace(
+                'id="ddc-email"',
+                f'id="ddc-email" value="{profile_email}"'
+            )
 
             self.send_response(200)
             self.send_header("Content-type", "text/html")
             self.end_headers()
             self.wfile.write(html.encode())
 
-        elif self.path == "/enquirer_register":
+        elif self.path.startswith("/enquirer_register"):
             self.send_response(200)
             self.send_header("Content-type", "text/html")
             self.end_headers()
             with open("Pages/enquirer_register.html", "r") as file:
                 self.wfile.write(file.read().encode())
-        elif self.path == "/enquirer_login":
+        elif self.path.startswith("/enquirer_login"):
             self.send_response(200)
             self.send_header("Content-type", "text/html")
             self.end_headers()
@@ -759,7 +802,7 @@ class MyHandler(BaseHTTPRequestHandler):
             self.end_headers()
             with open("Pages/submit_enquiry.html", "r") as file:
                 self.wfile.write(file.read().encode())
-        elif self.path == "/enquirer_dashboard":
+        elif self.path.startswith("/enquirer_dashboard"):
             enquirer_id = get_logged_in_enquirer_id(self)
             if not enquirer_id:
                 self.send_response(303)
@@ -839,7 +882,7 @@ class MyHandler(BaseHTTPRequestHandler):
     def do_POST(self):
 
         # LOGIN LOGIC
-        if self.path == "/login":
+        if self.path == "/" or self.path.startswith("/login"):
 
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
@@ -863,23 +906,29 @@ class MyHandler(BaseHTTPRequestHandler):
                 user_id = user[0]
                 role = user[1]
 
+                log_activity(
+                    user_id,
+                    f"Logged into the system as {role}"
+                )   
+
                 self.send_response(303)
                 self.send_header("Set-Cookie", f"user_id={user_id}")
 
                 if role == "Admin":
-                    self.send_header("Location", "/admin")
+                    self.send_header("Location", "/admin?success=Login successful")
                 elif role == "HOD":
-                    self.send_header("Location", "/hod")
+                    self.send_header("Location", "/hod?success=Login successful")
                 elif role == "DPO":
-                    self.send_header("Location", "/dpo")
+                    self.send_header("Location", "/dpo?success=Login successful")
                 elif role == "DDC":
-                    self.send_header("Location", "/ddc")
+                    self.send_header("Location", "/ddc?success=Login successful")
                 self.end_headers()
 
             else:
-                self.send_response(200)
+                self.send_response(303)
+                self.send_header("Location", "/login?error=Invalid email or password")
                 self.end_headers()
-                self.wfile.write(b"Invalid email or password")
+                
 
         # CREATE USER LOGIC (ADMIN)
         elif self.path == "/create_user":
@@ -902,10 +951,16 @@ class MyHandler(BaseHTTPRequestHandler):
             """, (name, email, password, role))
 
             conn.commit()
+            admin_id = get_logged_in_user_id(self)
+
+            log_activity(
+                admin_id,
+                f"Created {role} account for {name}"
+            )
             conn.close()
 
             self.send_response(303)
-            self.send_header("Location", "/admin")
+            self.send_header("Location", "/admin?success=User created successfully")
             self.end_headers()
 
         #DELETE USER LOGIC (ADMIN)
@@ -919,14 +974,26 @@ class MyHandler(BaseHTTPRequestHandler):
 
             conn = sqlite3.connect("odpc.db")
             cursor = conn.cursor()
+            cursor.execute(
+                "SELECT name, role FROM users WHERE id=?",
+                (user_id,)
+            )
 
+            deleted_user = cursor.fetchone()
             cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
 
             conn.commit()
+            admin_id = get_logged_in_user_id(self)
+
+            if deleted_user:
+                log_activity(
+                    admin_id,
+                    f"Deleted {deleted_user[1]} account: {deleted_user[0]}"
+                )
             conn.close()
 
             self.send_response(303)
-            self.send_header("Location", "/admin")
+            self.send_header("Location", "/admin?success=User deleted successfully")
             self.end_headers()   
 
         # VERIFY ENQUIRER (ADMIN)
@@ -944,23 +1011,20 @@ class MyHandler(BaseHTTPRequestHandler):
                 (enq_id,)
             )
             conn.commit()
+            admin_id = get_logged_in_user_id(self)
+
+            log_activity(
+                admin_id,
+                f"Approved enquirer profile #{enq_id}"
+            )
             conn.close()
 
             # Feedback
-            self.send_response(200)
-            self.send_header("Content-type", "text/html")
+            self.send_response(303)
+            self.send_header("Location", "/admin?success=Approval successful")
             self.end_headers()
-            self.wfile.write(b"""
-<!DOCTYPE html>
-<html>
-<body>
-    <h3>Approval successful.</h3>
-    <a href="/admin">Back to Admin Dashboard</a>
-</body>
-</html>
-""")
             return
-
+        
         
         # REJECT ENQUIRER (ADMIN)
         elif self.path == "/reject_enquirer":
@@ -991,11 +1055,17 @@ class MyHandler(BaseHTTPRequestHandler):
             )
 
             conn.commit()
+            admin_id = get_logged_in_user_id(self)
+
+            log_activity(
+                admin_id,
+                f"Rejected enquirer profile #{enq_id}"
+            )
             conn.close()
 
             # Simple feedback
             self.send_response(303)
-            self.send_header("Location", "/admin")
+            self.send_header("Location", "/admin?success=Profile rejected successfully")
             self.end_headers()
             return
 
@@ -1017,12 +1087,11 @@ class MyHandler(BaseHTTPRequestHandler):
             active_count = cursor.fetchone()[0] or 0
             if active_count >= 3:
                 conn.close()
-                self.send_response(200)
-                self.send_header("Content-type", "text/html")
+                self.send_response(303)
+                self.send_header("Location", "/hod?error=This DPO already has maximum active enquiries")
                 self.end_headers()
-                error_msg = f'<html><body><h3>This DPO already has {active_count} active enquiries and cannot take more.</h3><a href="/hod">Back to HOD Dashboard</a></body></html>'
-                self.wfile.write(error_msg.encode())
                 return
+                
 
             cursor.execute("""
                 UPDATE enquiries
@@ -1031,10 +1100,16 @@ class MyHandler(BaseHTTPRequestHandler):
             """, (dpo_id, enquiry_id))
 
             conn.commit()
+            hod_id = get_logged_in_user_id(self)
+
+            log_activity(
+                hod_id,
+                f"Assigned enquiry #{enquiry_id} to DPO #{dpo_id}"
+            )
             conn.close()
 
             self.send_response(303)
-            self.send_header("Location", "/hod")
+            self.send_header("Location", "/hod?success=DPO assigned successfully")
             self.end_headers()
 
         elif self.path == "/hod_update_profile":
@@ -1052,7 +1127,7 @@ class MyHandler(BaseHTTPRequestHandler):
             name = data.get("name", [""])[0].strip()
             email = data.get("email", [""])[0].strip()
             if not name or not email:
-                self.send_response(400)
+                self.send_response(303)
                 self.end_headers()
                 self.wfile.write(b"Name and email are required.")
                 return
@@ -1064,7 +1139,7 @@ class MyHandler(BaseHTTPRequestHandler):
             conn.close()
 
             self.send_response(303)
-            self.send_header("Location", "/hod")
+            self.send_header("Location", "/hod?success=Profile updated successfully")
             self.end_headers()
 
         elif self.path == "/hod_change_password":
@@ -1085,14 +1160,16 @@ class MyHandler(BaseHTTPRequestHandler):
 
             if not old_password or not new_password or not confirm_password:
                 self.send_response(400)
+                self.send_header("Location", "/hod?error=All password fields are required")
                 self.end_headers()
-                self.wfile.write(b"All password fields are required.")
+                
                 return
 
             if new_password != confirm_password:
                 self.send_response(400)
+                self.send_header("Location", "/hod?error=Passwords do not match")
                 self.end_headers()
-                self.wfile.write(b"New password and confirmation do not match.")
+                
                 return
 
             conn = sqlite3.connect("odpc.db")
@@ -1100,17 +1177,22 @@ class MyHandler(BaseHTTPRequestHandler):
             cursor.execute("SELECT id FROM users WHERE id = ? AND password = ? AND role = 'HOD'", (hod_user_id, old_password))
             if not cursor.fetchone():
                 conn.close()
-                self.send_response(400)
+                self.send_response(303)
+                self.send_header("Location", "/hod?error=Current password is incorrect")
                 self.end_headers()
-                self.wfile.write(b"Current password is incorrect.")
+                
                 return
 
             cursor.execute("UPDATE users SET password = ? WHERE id = ?", (new_password, hod_user_id))
             conn.commit()
+            log_activity(
+                hod_user_id,
+                "Changed password"
+            )
             conn.close()
 
             self.send_response(303)
-            self.send_header("Location", "/hod")
+            self.send_header("Location", "/hod?success=Password changed successfully")
             self.end_headers()
 
         # SUBMIT ADVISORY LOGIC (DPO)
@@ -1127,7 +1209,7 @@ class MyHandler(BaseHTTPRequestHandler):
             advisory_title = data.get("advisory_title", "").strip()
 
             if not enquiry_id or not draft_content:
-                self.send_response(400)
+                self.send_response(303)
                 self.end_headers()
                 self.wfile.write(b"Missing enquiry_id or draft_content")
                 return
@@ -1178,10 +1260,14 @@ class MyHandler(BaseHTTPRequestHandler):
                 """, (enquiry_id, dpo_id, draft_content, advisory_title, file_path))
 
             conn.commit()
+            log_activity(
+                dpo_id,
+                f"Submitted advisory for enquiry #{enquiry_id}"
+            )
             conn.close()
 
             self.send_response(303)
-            self.send_header("Location", "/dpo")
+            self.send_header("Location", "/dpo?success=Advisory submitted successfully")
             self.end_headers()
 
         elif self.path == "/review_advisory":
@@ -1236,10 +1322,19 @@ class MyHandler(BaseHTTPRequestHandler):
                 """, (comment, advisory_id))
 
             conn.commit()
+            ddc_id = get_logged_in_user_id(self)
+
+            log_activity(
+                ddc_id,
+                f"Returned advisory #{advisory_id} for revision"
+            )
             conn.close()
 
             self.send_response(303)
-            self.send_header("Location", "/ddc")
+            if action == "approve":
+                self.send_header("Location", "/ddc?success=Advisory approved successfully")
+            else:
+                self.send_header("Location", "/ddc?success=Advisory returned for revision")
             self.end_headers()
 
         elif self.path == "/enquirer_register":
@@ -1264,27 +1359,28 @@ class MyHandler(BaseHTTPRequestHandler):
 
             # Basic validation
             if enquirer_type not in ["company", "individual"]:
-                self.send_response(400)
+                self.send_response(303)
                 self.end_headers()
                 self.wfile.write(b"Invalid enquirer type")
                 return
 
             if not name or not email or not password or not pobox or not location or not county or not kra_pin:
-                self.send_response(400)
+                self.send_response(303)
                 self.end_headers()
                 self.wfile.write(b"Missing required fields")
                 return
 
             if password != confirm_password:
-                self.send_response(400)
+                self.send_response(303)
+                self.send_header("Location", "/enquirer_register?error=Passwords do not match")
                 self.end_headers()
-                self.wfile.write(b"Passwords do not match")
                 return
+                
 
             if enquirer_type == "individual" and not id_number:
-                self.send_response(400)
+                self.send_response(303)
+                self.send_header("Location", "/enquirer_register?error=Missing ID number")
                 self.end_headers()
-                self.wfile.write(b"Missing ID number")
                 return
 
             conn = sqlite3.connect("odpc.db")
@@ -1294,31 +1390,30 @@ class MyHandler(BaseHTTPRequestHandler):
             cursor.execute("SELECT id FROM enquirers WHERE email = ?", (email,))
             if cursor.fetchone():
                 conn.close()
-                self.send_response(200)
-                self.send_header("Content-type", "text/html")
+                self.send_response(303)
+                self.send_header("Location", "/enquirer_register?error=Account already exists")
                 self.end_headers()
-                self.wfile.write(b"<html><body><h3>Profile already exists</h3><a href=\"/enquirer_register\">Try again</a></body></html>")
                 return
+            
 
             # Duplicate detection: KRA PIN
             cursor.execute("SELECT id FROM enquirers WHERE kra_pin = ?", (kra_pin,))
             if cursor.fetchone():
                 conn.close()
-                self.send_response(200)
-                self.send_header("Content-type", "text/html")
+                self.send_response(303)
+                self.send_header("Location", "/enquirer_register?error=Account already exists")
                 self.end_headers()
-                self.wfile.write(b"<html><body><h3>Profile already exists</h3><a href=\"/enquirer_register\">Try again</a></body></html>")
                 return
+                
 
             # Individual duplicate detection: ID number
             if enquirer_type == "individual":
                 cursor.execute("SELECT id FROM enquirers WHERE id_number = ?", (id_number,))
                 if cursor.fetchone():
                     conn.close()
-                    self.send_response(200)
-                    self.send_header("Content-type", "text/html")
+                    self.send_response(303)
+                    self.send_header("Location", "/enquirer_register?error=Account already exists")
                     self.end_headers()
-                    self.wfile.write(b"<html><body><h3>Profile already exists</h3><a href=\"/enquirer_register\">Try again</a></body></html>")
                     return
 
             # Insert new pending enquirer
@@ -1335,7 +1430,7 @@ class MyHandler(BaseHTTPRequestHandler):
             conn.close()
 
             self.send_response(303)
-            self.send_header("Location", "/enquirer_login")
+            self.send_header("Location", "/enquirer_login?success=Registration successful. Await admin approval.")
             self.end_headers()
 
 
@@ -1356,21 +1451,12 @@ class MyHandler(BaseHTTPRequestHandler):
             if enquirer:
                 self.send_response(303)
                 self.send_header("Set-Cookie", f"enquirer_id={enquirer[0]}; Path=/")
-                self.send_header("Location", "/enquirer_dashboard")
+                self.send_header("Location", "/enquirer_dashboard?success=Login successful")
                 self.end_headers()
             else:
-                self.send_response(200)
-                self.send_header("Content-type", "text/html")
+                self.send_response(303)
+                self.send_header("Location", "/enquirer_login?error=Invalid credentials or account not approved")
                 self.end_headers()
-                self.wfile.write(b"""
-<!DOCTYPE html>
-<html>
-<body>
-Unverified account or invalid credentials. Contact admin for approval.
-<a href="/enquirer_login">Back to Login</a>
-</body>
-</html>
-                """)
 
         elif self.path == "/submit_enquiry":
             enquirer_id = get_logged_in_enquirer_id(self)
@@ -1399,7 +1485,12 @@ Unverified account or invalid credentials. Contact admin for approval.
                 VALUES (?, ?, ?, ?, ?, 'New', ?)
             """, (enquirer[0], enquirer[1], subject, description, date_received, enquirer_id))
             conn.commit()
-            conn.close()
+           # log_activity(
+            #    user_id=None,
+             #   enquirer_id,
+              #  action="Submitted enquiry"
+            #)
+            conn.close() 
 
             self.send_response(303)
             self.send_header("Location", "/enquirer_dashboard")
@@ -1440,10 +1531,14 @@ Unverified account or invalid credentials. Contact admin for approval.
             )
 
             conn.commit()
+            log_activity(
+                user_id,
+                "Updated profile information"
+            )
             conn.close()
 
             self.send_response(303)
-            self.send_header("Location", "/dpo")
+            self.send_header("Location", "/dpo?success=Profile updated successfully")
             self.end_headers()
         elif self.path == "/dpo_change_password":
 
@@ -1474,11 +1569,8 @@ Unverified account or invalid credentials. Contact admin for approval.
             if new_password != confirm_password:
 
                 self.send_response(200)
+                self.send_header("Location", "/dpo?error=New password and confirmation do not match")
                 self.end_headers()
-
-                self.wfile.write(
-                    b"Passwords do not match"
-                )
 
                 return
 
@@ -1500,13 +1592,102 @@ Unverified account or invalid credentials. Contact admin for approval.
 
                 conn.close()
 
-                self.send_response(200)
+                self.send_response(303)
+                self.send_header("Location", "/dpo?error=Current password is incorrect")
                 self.end_headers()
+                return
+               
+            cursor.execute(
+                """
+                UPDATE users
+                SET password=?
+                WHERE id=?
+                """,
+                (new_password, user_id)
+            )
 
-                self.wfile.write(
-                    b"Current password incorrect"
-                )
+            conn.commit()
+            log_activity(
+                user_id,
+                "Changed password"
+            )
+            conn.close()
 
+            self.send_response(303)
+            self.send_header("Location", "/dpo?success=Password changed successfully")
+            self.end_headers()
+        elif self.path == "/ddc_update_profile":
+
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = urllib.parse.parse_qs(post_data.decode())
+
+            user_id = get_logged_in_user_id(self)
+            name = data.get("name")[0]
+            email = data.get("email")[0]
+
+            conn = sqlite3.connect("odpc.db")
+            cursor = conn.cursor()
+
+            cursor.execute(
+                """
+                UPDATE users
+                SET name=?, email=?
+                WHERE id=?
+                """,
+                (name, email, user_id)
+            )
+
+            conn.commit()
+            log_activity(
+                user_id,
+                "Updated profile information"
+            )
+            conn.close()
+
+            self.send_response(303)
+            self.send_header("Location", "/ddc?success=Profile updated successfully")
+            self.end_headers()
+
+        elif self.path == "/ddc_change_password":
+
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = urllib.parse.parse_qs(post_data.decode())
+
+            user_id = get_logged_in_user_id(self)
+
+            old_password = data.get("old_password")[0]
+            new_password = data.get("new_password")[0]
+            confirm_password = data.get("confirm_password")[0]
+
+            if new_password != confirm_password:
+                self.send_response(303)
+                self.send_header("Location", "/ddc?error=New password and confirmation do not match")
+                self.end_headers()
+                
+                return
+
+            conn = sqlite3.connect("odpc.db")
+            cursor = conn.cursor()
+
+            cursor.execute(
+                """
+                SELECT password
+                FROM users
+                WHERE id=?
+                """,
+                (user_id,)
+            )
+
+            result = cursor.fetchone()
+
+            if not result or result[0] != old_password:
+                conn.close()
+                self.send_response(303)
+                self.send_header("Location", "/ddc?error=Current password is incorrect")
+                self.end_headers()
+                
                 return
 
             cursor.execute(
@@ -1519,12 +1700,15 @@ Unverified account or invalid credentials. Contact admin for approval.
             )
 
             conn.commit()
+            log_activity(
+                user_id,
+                "Changed password"
+            )
             conn.close()
 
             self.send_response(303)
-            self.send_header("Location", "/dpo")
+            self.send_header("Location", "/ddc?success=Password changed successfully")
             self.end_headers()
-
 def run():
     server = HTTPServer(("localhost", PORT), MyHandler)
     print(f"Server running on http://localhost:{PORT}")
