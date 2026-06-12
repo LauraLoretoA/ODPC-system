@@ -49,7 +49,24 @@ def create_notification(user_id, message):
 
     conn.commit()
     conn.close()
+def notification_exists(user_id, message):
 
+    conn = sqlite3.connect("odpc.db")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id
+        FROM notifications
+        WHERE user_id = ?
+        AND message = ?
+        AND is_read = 0
+    """, (user_id, message))
+
+    exists = cursor.fetchone()
+
+    conn.close()
+
+    return exists is not None
 def get_logged_in_user_id(handler):
     cookie = handler.headers.get('Cookie')
     if not cookie:
@@ -510,8 +527,12 @@ class MyHandler(BaseHTTPRequestHandler):
                             )
                         except Exception:
                             received_dt = None
-
-                if received_dt:
+                            
+                if status == "Completed":
+                    deadline_label = "Completed"
+                    deadline_status = "Completed"
+                
+                elif received_dt:
                     deadline_dt = received_dt + timedelta(days=10)
                     days_remaining = (deadline_dt - datetime.today()).days
 
@@ -542,7 +563,20 @@ class MyHandler(BaseHTTPRequestHandler):
                     "assigned_dpo_id": assigned_dpo_id,
                     "assigned_dpo_name": dpo_name,
                 }) 
+                
+                #Alerts
+                if deadline_status in ["Approaching Deadline", "Overdue"]:
+                    hod_message = f"Deadline alert: Enquiry #{enq_id} is {deadline_status.lower()}"
 
+                    if not notification_exists(user_id, hod_message):
+                        create_notification(user_id, hod_message)
+
+                    if assigned_dpo_id:
+                        dpo_message = f"Deadline alert: Enquiry #{enq_id} is {deadline_status.lower()}"
+
+                        if not notification_exists(assigned_dpo_id, dpo_message):
+                            create_notification(assigned_dpo_id, dpo_message)
+                            
                 deadline_report.append({
                     "id": enq_id,
                     "subject": subject,
@@ -669,7 +703,10 @@ class MyHandler(BaseHTTPRequestHandler):
                     file_path = enquiry[10]
                     date_received_str = enquiry[5]
 
-                    if date_received_str:
+                    if review_status == "Approved":
+                       deadline_status = "N/A"
+
+                    elif date_received_str:
                         try:
                             date_received = datetime.strptime(date_received_str, "%Y-%m-%d %H:%M:%S")
                         except ValueError:
@@ -680,11 +717,14 @@ class MyHandler(BaseHTTPRequestHandler):
 
                         if days_remaining < 0:
                             deadline_status = "<span style='color:red;'>OVERDUE</span>"
+                        elif days_remaining == 0:
+                            deadline_status = "<span style='color:orange;'>Due today</span>"
                         else:
                             deadline_status = f"{days_remaining} days remaining"
+
                     else:
                         deadline_status = "No date recorded"
-
+                        
                     card_status = review_status if review_status else "Not reviewed"
 
                     dpo_enquiries_html += f"""
