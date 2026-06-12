@@ -387,6 +387,7 @@ class MyHandler(BaseHTTPRequestHandler):
 
             dpo_workloads = []
             available_dpos = []
+            dpo_performance = []
             for dpo in dpo_rows:
                 dpo_id, dpo_name, dpo_email = dpo
                 cursor.execute("""
@@ -399,6 +400,8 @@ class MyHandler(BaseHTTPRequestHandler):
                 active_count = len([row for row in assigned_rows if row[2] != 'Completed'])
                 assigned_titles = [row[1] or f"Enquiry {row[0]}" for row in assigned_rows]
                 assigned_enquiry_ids = [str(row[0]) for row in assigned_rows]
+                completed_count = len([row for row in assigned_rows if row[2] == 'Completed'])
+                pending_count = len([row for row in assigned_rows if row[2] != 'Completed'])
                 status_badge = "Available" if active_count < 3 else "Full"
                 badge_style = "hod-status-available" if active_count < 3 else "hod-status-full"
 
@@ -420,30 +423,63 @@ class MyHandler(BaseHTTPRequestHandler):
                     "statusBadgeText": status_badge,
                     "statusBadgeClass": badge_style
                 })
+                dpo_performance.append({
+                    "name": dpo_name,
+                    "email": dpo_email,
+                    "assigned": len(assigned_rows),
+                    "completed": completed_count,
+                    "pending": pending_count
+                })
 
             conn.close()
+
+            deadline_report = []
+            approaching_deadline_count = 0
+            overdue_count = 0
 
             enquiries_list = []
             for enq in enquiries:
                 enq_id, enq_name, enq_email, subject, description, date_received, status, assigned_dpo_id, dpo_name = enq
                 deadline_label = "—"
+                days_remaining_value = "N/A"
+                deadline_status = "No date recorded"
+                received_dt = None
+
                 if date_received:
                     try:
-                        received_dt = datetime.strptime(date_received, "%Y-%m-%d %H:%M:%S")
+                        received_dt = datetime.strptime(
+                            date_received,
+                            "%Y-%m-%d %H:%M:%S"
+                        )
                     except ValueError:
+
                         try:
-                            received_dt = datetime.strptime(date_received, "%Y-%m-%d")
+                            received_dt = datetime.strptime(
+                                date_received,
+                                "%Y-%m-%d"
+                            )
                         except Exception:
                             received_dt = None
-                    if received_dt:
-                        deadline_dt = received_dt + timedelta(days=10)
-                        days_remaining = (deadline_dt - datetime.today()).days
-                        if days_remaining < 0:
-                            deadline_label = "OVERDUE"
-                        elif days_remaining == 0:
-                            deadline_label = "Today"
-                        else:
-                            deadline_label = f"{days_remaining} days left"
+
+                if received_dt:
+                    deadline_dt = received_dt + timedelta(days=10)
+                    days_remaining = (deadline_dt - datetime.today()).days
+
+                    days_remaining_value = days_remaining
+
+                    if days_remaining < 0:
+                        deadline_label = "OVERDUE"
+                        deadline_status = "Overdue"
+                        overdue_count += 1
+
+                    elif days_remaining <= 3:
+                          deadline_label = f"{days_remaining} days left"
+                          deadline_status = "Approaching Deadline"
+                          approaching_deadline_count += 1
+
+                    else:
+                        deadline_label = f"{days_remaining} days left"
+                        deadline_status = "Safe"
 
                 enquiries_list.append({
                     "id": enq_id,
@@ -455,6 +491,14 @@ class MyHandler(BaseHTTPRequestHandler):
                     "status": status,
                     "assigned_dpo_id": assigned_dpo_id,
                     "assigned_dpo_name": dpo_name,
+                }) 
+
+                deadline_report.append({
+                    "id": enq_id,
+                    "subject": subject,
+                    "assignedDpo": dpo_name if dpo_name else "Unassigned",
+                    "daysRemaining": days_remaining_value,
+                    "deadlineStatus": deadline_status
                 })
 
             hod_state = {
@@ -467,6 +511,14 @@ class MyHandler(BaseHTTPRequestHandler):
                 "enquiries": enquiries_list,
                 "dpoWorkloads": dpo_workloads,
                 "availableDpos": available_dpos,
+                "reports": {
+                    "totalEnquiries": len(enquiries),
+                    "completedAdvisories": completed_enquiries,
+                    "approachingDeadline": approaching_deadline_count,
+                    "overdueEnquiries": overdue_count,
+                    "dpoPerformance": dpo_performance,
+                    "deadlines": deadline_report
+                },
                 "profile": hod_profile
             }
 

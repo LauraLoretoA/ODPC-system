@@ -170,6 +170,7 @@ function filterCards(status) {
         card.style.display = cardStatus === status ? "" : "none";
     });
 }
+//Function for feedback messages 
 function showToastFromURL() {
     const params = new URLSearchParams(window.location.search);
     const success = params.get("success");
@@ -201,7 +202,62 @@ function showToastFromURL() {
         }, 300);
     }, 3000);
 }
+// Function for reports 
+function renderReports(state) {
+    if (!state.reports) return;
 
+    const total = document.getElementById('report-total');
+    const completed = document.getElementById('report-completed');
+    const approaching = document.getElementById('report-approaching');
+    const overdue = document.getElementById('report-overdue');
+
+    if (total) total.textContent = state.reports.totalEnquiries;
+    if (completed) completed.textContent = state.reports.completedAdvisories;
+    if (approaching) approaching.textContent = state.reports.approachingDeadline;
+    if (overdue) overdue.textContent = state.reports.overdueEnquiries;
+
+    const performanceBody = document.getElementById('report-dpo-performance');
+    if (performanceBody) {
+        performanceBody.innerHTML = '';
+
+        if (!state.reports.dpoPerformance.length) {
+            performanceBody.innerHTML = '<tr><td colspan="5" class="hod-empty-state">No DPO performance data available.</td></tr>';
+        } else {
+            state.reports.dpoPerformance.forEach(dpo => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${dpo.name}</td>
+                    <td>${dpo.email}</td>
+                    <td>${dpo.assigned}</td>
+                    <td>${dpo.completed}</td>
+                    <td>${dpo.pending}</td>
+                `;
+                performanceBody.appendChild(tr);
+            });
+        }
+    }
+
+    const deadlineBody = document.getElementById('report-deadlines');
+    if (deadlineBody) {
+        deadlineBody.innerHTML = '';
+
+        if (!state.reports.deadlines.length) {
+            deadlineBody.innerHTML = '<tr><td colspan="5" class="hod-empty-state">No deadline data available.</td></tr>';
+        } else {
+            state.reports.deadlines.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${item.id}</td>
+                    <td>${item.subject}</td>
+                    <td>${item.assignedDpo}</td>
+                    <td>${item.daysRemaining}</td>
+                    <td>${item.deadlineStatus}</td>
+                `;
+                deadlineBody.appendChild(tr);
+            });
+        }
+    }
+}
 window.addEventListener('DOMContentLoaded', () => {
     showToastFromURL();
     // Sidebar tabs for Admin, HOD, DPO, and DDC dashboards
@@ -221,5 +277,6 @@ window.addEventListener('DOMContentLoaded', () => {
     renderStats(state);
     renderEnquiries(state);
     renderWorkload(state);
+    renderReports(state);
     renderProfile(state);
 });
