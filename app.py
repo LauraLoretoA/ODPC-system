@@ -236,8 +236,29 @@ class MyHandler(BaseHTTPRequestHandler):
                 ORDER BY role, name
                 """)
             users = cursor.fetchall()
+            cursor.execute("""
+                SELECT message, created_at
+                FROM notifications
+                WHERE user_id = ? AND is_read = 0
+                ORDER BY id DESC
+                LIMIT 5
+            """, (get_logged_in_user_id(self),))
 
+            notifications = cursor.fetchall()
             print(f"DEBUG ADMIN: Found {len(pending_enquirers)} pending enquirers: {pending_enquirers}")
+            notifications_html = ""
+
+            if notifications:
+                for note in notifications:
+                    notifications_html += f"""
+                    <article class="hod-workload-card">
+                        <p><strong>{note[0]}</strong></p>
+                        <p class="hod-small-text">{note[1]}</p>
+                    </article>
+                    """
+            else:
+                notifications_html = '<div class="hod-empty-state">No unread notifications.</div>'
+            
             conn.close()
 
             self.send_response(200)
@@ -339,6 +360,7 @@ class MyHandler(BaseHTTPRequestHandler):
 
             html = html.replace('<div id="pending-enquirers-list"></div>', pending_html)
             html = html.replace('<div id="users-list"></div>', users_html)
+            html = html.replace('<div id="admin-notifications-list"></div>', notifications_html)
     
             print(f"DEBUG ADMIN: Final HTML length: {len(html)}")
 
@@ -589,6 +611,17 @@ class MyHandler(BaseHTTPRequestHandler):
 
             profile = cursor.fetchone()
             cursor.execute("""
+                SELECT message, created_at
+                FROM notifications
+                WHERE user_id = ? AND is_read = 0
+                ORDER BY id DESC
+                LIMIT 5
+            """, (user_id,))
+
+            notifications = cursor.fetchall()
+            
+            
+            cursor.execute("""
                 SELECT
                     enquiries.id,
                     enquiries.enquirer_name,
@@ -607,8 +640,22 @@ class MyHandler(BaseHTTPRequestHandler):
                 ON enquiries.id = advisories.enquiry_id
                 WHERE enquiries.assigned_dpo_id = ?
             """, (user_id,))
-
+            
+        
             enquiries = cursor.fetchall()
+            notifications_html = ""
+
+            if notifications:
+                for note in notifications:
+                    notifications_html += f"""
+                    <article class="hod-workload-card">
+                        <p><strong>{note[0]}</strong></p>
+                        <p class="hod-small-text">{note[1]}</p>
+                    </article>
+                    """
+            else:
+                notifications_html = '<div class="hod-empty-state">No unread notifications.</div>'
+            
             conn.close()
 
             today = datetime.today()
@@ -687,6 +734,7 @@ class MyHandler(BaseHTTPRequestHandler):
                 html = file.read()
 
             html = html.replace("{{dpo_enquiries}}", dpo_enquiries_html)
+            html = html.replace("{{dpo_notifications}}", notifications_html)
 
             html = html.replace(
                 "Loading...</span>",
@@ -785,7 +833,18 @@ class MyHandler(BaseHTTPRequestHandler):
                 (user_id,)
             )
             profile = cursor.fetchone()
+            
+            cursor.execute("""
+                SELECT message, created_at
+                FROM notifications
+                WHERE user_id = ? AND is_read = 0
+                ORDER BY id DESC
+                LIMIT 5
+            """, (user_id,))
 
+            notifications = cursor.fetchall()
+            
+            
             cursor.execute("""
                 SELECT
                     advisories.id,
@@ -803,6 +862,18 @@ class MyHandler(BaseHTTPRequestHandler):
             """)
 
             advisories = cursor.fetchall()
+            notifications_html = ""
+
+            if notifications:
+                for note in notifications:
+                    notifications_html += f"""
+                    <article class="hod-workload-card">
+                        <p><strong>{note[0]}</strong></p>
+                        <p class="hod-small-text">{note[1]}</p>
+                    </article>
+                    """
+            else:
+                notifications_html = '<div class="hod-empty-state">No unread notifications.</div>'
             conn.close()
 
             ddc_advisories_html = ""
@@ -853,6 +924,7 @@ class MyHandler(BaseHTTPRequestHandler):
                 html = file.read()
 
             html = html.replace("{{ddc_advisories}}", ddc_advisories_html)
+            html = html.replace("{{ddc_notifications}}", notifications_html)
             html = html.replace("Loading...</span>", f"{profile_name}</span>", 1)
             html = html.replace("Loading...</span>", f"{profile_email}</span>", 1)
 

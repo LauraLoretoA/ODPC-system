@@ -25,7 +25,9 @@
                     <button class="hod-nav-button active" data-tab="assigned-enquiries">
                         Assigned Enquiries
                     </button>
-
+                    <button class="hod-nav-button" data-tab="notifications">
+                        Notifications
+                    </button>
                     <button class="hod-nav-button" data-tab="my-profile">
                         My Profile
                     </button>
@@ -50,7 +52,22 @@
                     <div class="hod-workload-list">
                         {{dpo_enquiries}}
                     </div>
+                
                 </section>
+
+                <section id="notifications" class="hod-panel hidden">
+                    <div class="hod-panel-header">
+                        <div>
+                            <h2>Notifications</h2>
+                            <p>View your recent notifications and updates.</p>
+                        </div>
+                    </div>
+                    <div class="hod-workload-list">
+                        {{dpo_notifications}}
+                    </div>
+                </section>
+
+
                 <section id="my-profile" class="hod-panel hidden">
 
     <div class="hod-panel-header">
