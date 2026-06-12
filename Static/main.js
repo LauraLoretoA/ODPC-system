@@ -258,6 +258,31 @@ function renderReports(state) {
         }
     }
 }
+// Function for notifications
+function renderNotifications(state) {
+    const container = document.getElementById('notifications-list');
+
+    if (!container || !state.notifications) return;
+
+    container.innerHTML = '';
+
+    if (!state.notifications.length) {
+        container.innerHTML = '<div class="hod-empty-state">No unread notifications.</div>';
+        return;
+    }
+
+    state.notifications.forEach(note => {
+        const card = document.createElement('article');
+        card.className = 'hod-workload-card';
+
+        card.innerHTML = `
+            <p><strong>${note.message}</strong></p>
+            <p class="hod-small-text">${note.createdAt}</p>
+        `;
+
+        container.appendChild(card);
+    });
+}
 window.addEventListener('DOMContentLoaded', () => {
     showToastFromURL();
     // Sidebar tabs for Admin, HOD, DPO, and DDC dashboards
@@ -278,5 +303,6 @@ window.addEventListener('DOMContentLoaded', () => {
     renderEnquiries(state);
     renderWorkload(state);
     renderReports(state);
+    renderNotifications(state);
     renderProfile(state);
 });

@@ -83,6 +83,17 @@ def create_tables():
         FOREIGN KEY (user_id) REFERENCES users(id)
     )
     """)
+    # NOTIFICATIONS TABLE
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        message TEXT NOT NULL,
+        is_read INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )
+    """)
 
     # Add new columns if they don't exist 
     try:

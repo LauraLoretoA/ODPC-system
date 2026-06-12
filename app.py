@@ -29,6 +29,26 @@ def log_activity(user_id, action):
 
     conn.commit()
     conn.close()
+def create_notification(user_id, message):
+
+    conn = sqlite3.connect("odpc.db")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO notifications (
+            user_id,
+            message,
+            created_at
+        )
+        VALUES (?, ?, ?)
+    """, (
+        user_id,
+        message,
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ))
+
+    conn.commit()
+    conn.close()
 
 def get_logged_in_user_id(handler):
     cookie = handler.headers.get('Cookie')
@@ -430,7 +450,15 @@ class MyHandler(BaseHTTPRequestHandler):
                     "completed": completed_count,
                     "pending": pending_count
                 })
+            cursor.execute("""
+                SELECT message, created_at
+                FROM notifications
+                WHERE user_id = ? AND is_read = 0
+                ORDER BY id DESC
+                LIMIT 5
+            """, (user_id,))
 
+            notifications = cursor.fetchall()
             conn.close()
 
             deadline_report = []
@@ -500,7 +528,13 @@ class MyHandler(BaseHTTPRequestHandler):
                     "daysRemaining": days_remaining_value,
                     "deadlineStatus": deadline_status
                 })
+            notifications_list = []
 
+            for note in notifications:
+                notifications_list.append({
+                    "message": note[0],
+                    "createdAt": note[1]
+                })
             hod_state = {
                 "stats": {
                     "new": new_enquiries,
@@ -519,6 +553,7 @@ class MyHandler(BaseHTTPRequestHandler):
                     "dpoPerformance": dpo_performance,
                     "deadlines": deadline_report
                 },
+                "notifications": notifications_list,
                 "profile": hod_profile
             }
 
@@ -1152,6 +1187,12 @@ class MyHandler(BaseHTTPRequestHandler):
             """, (dpo_id, enquiry_id))
 
             conn.commit()
+            create_notification(
+                dpo_id,
+                f"You have been assigned enquiry #{enquiry_id}"
+            )
+
+
             hod_id = get_logged_in_user_id(self)
 
             log_activity(
@@ -1312,6 +1353,18 @@ class MyHandler(BaseHTTPRequestHandler):
                 """, (enquiry_id, dpo_id, draft_content, advisory_title, file_path))
 
             conn.commit()
+            cursor.execute(
+                "SELECT id FROM users WHERE role='DDC'"
+            )
+
+            ddc = cursor.fetchone()
+
+            if ddc:
+                create_notification(
+                    ddc[0],
+                    f"Advisory submitted for enquiry #{enquiry_id}"
+                )
+            
             log_activity(
                 dpo_id,
                 f"Submitted advisory for enquiry #{enquiry_id}"
@@ -1479,6 +1532,18 @@ class MyHandler(BaseHTTPRequestHandler):
             """, (enquirer_type, name, email, password, pobox, location, county, kra_pin, id_number))
 
             conn.commit()
+            cursor.execute(
+                "SELECT id FROM users WHERE role='Admin'"
+            )
+
+            admin = cursor.fetchone()
+
+            if admin:
+                create_notification(
+                    admin[0],
+                    f"New enquirer registration awaiting approval"
+               )
+                
             conn.close()
 
             self.send_response(303)
@@ -1542,6 +1607,17 @@ class MyHandler(BaseHTTPRequestHandler):
              #   enquirer_id,
               #  action="Submitted enquiry"
             #)
+            cursor.execute(
+                "SELECT id FROM users WHERE role='HOD'"
+            )
+
+            hod = cursor.fetchone()
+
+            if hod:
+                create_notification(
+                    hod[0],
+                    f"New enquiry submitted: {subject}"
+                )
             conn.close() 
 
             self.send_response(303)
