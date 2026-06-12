@@ -543,7 +543,7 @@ class MyHandler(BaseHTTPRequestHandler):
                         deadline_status = "Overdue"
                         overdue_count += 1
 
-                    elif days_remaining <= 3:
+                    elif days_remaining <= 10:
                           deadline_label = f"{days_remaining} days left"
                           deadline_status = "Approaching Deadline"
                           approaching_deadline_count += 1
@@ -1001,8 +1001,11 @@ class MyHandler(BaseHTTPRequestHandler):
             self.end_headers()
             with open("Pages/submit_enquiry.html", "r") as file:
                 self.wfile.write(file.read().encode())
+                
+                
         elif self.path.startswith("/enquirer_dashboard"):
             enquirer_id = get_logged_in_enquirer_id(self)
+
             if not enquirer_id:
                 self.send_response(303)
                 self.send_header("Location", "/enquirer_login")
@@ -1011,6 +1014,7 @@ class MyHandler(BaseHTTPRequestHandler):
 
             conn = sqlite3.connect("odpc.db")
             cursor = conn.cursor()
+
             cursor.execute("""
                 SELECT e.id, e.subject, e.description, e.date_received, e.status,
                        a.final_content, a.advisory_title
@@ -1019,59 +1023,99 @@ class MyHandler(BaseHTTPRequestHandler):
                 WHERE e.enquirer_id = ?
                 ORDER BY e.id DESC
             """, (enquirer_id,))
+
             enquiries = cursor.fetchall()
             conn.close()
 
-            self.send_response(200)
-            self.send_header("Content-type", "text/html")
-            self.end_headers()
+            total_enquiries = len(enquiries)
+            new_enquiries = len([e for e in enquiries if e[4] == "New"])
+            assigned_enquiries = len([e for e in enquiries if e[4] == "Assigned"])
+            completed_enquiries = len([e for e in enquiries if e[4] == "Completed"])
 
-            with open("Pages/enquirer_dashboard.html", "r") as file:
-                html = file.read()
+            enquiries_rows = ""
+            advisories_list = ""
 
-            # Dynamic enquiries section
-            enquiries_html = "<h3>Your Enquiries:</h3>"
+            today = datetime.today()
+
             if enquiries:
-                today = datetime.today()
                 for enquiry in enquiries:
                     enq_id, subject, desc, date_str, status, final_content, advisory_title = enquiry
-                    # Calculate deadline (10 days from received)
-                    if date_str:
+
+                    if status == "Completed":
+                        deadline_status = "N/A"
+
+                    elif date_str:
                         try:
                             date_received = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
                         except ValueError:
                             date_received = datetime.strptime(date_str, "%Y-%m-%d")
-                        deadline = date_received + timedelta(days=10)
-                        days_remaining = max(0, (deadline - today).days)
-                        if days_remaining == 0:
-                            deadline_status = "<span style='color:orange;'>Today</span>"
-                        elif days_remaining < 0:
-                            deadline_status = "<span style='color:red;'>Overdue</span>"
-                        else:
-                            deadline_status = f"{days_remaining} days left"
-                    else:
-                        deadline_status = "N/A"
 
-                    enquiries_html += f"""
-                    <article class='item-card'>
-                        <p><strong>ID:</strong> {enq_id}</p>
-                        <p><strong>Subject:</strong> {subject}</p>
-                        <p><strong>Status:</strong> <span style="color:{'green' if status=='Completed' else 'blue' if status=='Assigned' else 'orange'}">{status}</span></p>
-                        <p><strong>Date:</strong> {date_str or 'N/A'}</p>
-                        <p><strong>Deadline:</strong> {deadline_status}</p>
-                        <p><strong>Description:</strong> {desc[:100]}{'...' if len(desc)>100 else ''}</p>
-                        {f"<hr><p><strong>Advisory Title:</strong> {advisory_title}</p><p><strong>Final Response:</strong><br>{final_content}</p>" if status == 'Completed' and final_content else ""}
-                    </article>
+                        deadline = date_received + timedelta(days=10)
+                        days_remaining = (deadline - today).days
+
+                        if days_remaining < 0:
+                            deadline_status = "<span style='color:red;'>OVERDUE</span>"
+                        elif days_remaining == 0:
+                            deadline_status = "<span style='color:orange;'>Due today</span>"
+                        else:
+                            deadline_status = f"{days_remaining} days remaining"
+                    else:
+                        deadline_status = "No date recorded"
+
+                    enquiries_rows += f"""
+                    <tr>
+                        <td>{enq_id}</td>
+                        <td>{subject}</td>
+                        <td>{status}</td>
+                        <td>{date_str or 'N/A'}</td>
+                        <td>{deadline_status}</td>
+                    </tr>
                     """
+
+                    if status == "Completed" and final_content:
+                        advisories_list += f"""
+                        <article class="hod-workload-card">
+                            <div class="hod-workload-card-header">
+                                <div>
+                                    <h3>{advisory_title if advisory_title else subject}</h3>
+                                    <p class="hod-small-text">Enquiry #{enq_id}</p>
+                                </div>
+                                <span class="hod-badge hod-status-available">Issued</span>
+                            </div>
+
+                            <p><strong>Subject:</strong> {subject}</p>
+                            <p><strong>Advisory Response:</strong><br>{final_content}</p>
+                        </article>
+                        """
             else:
-                enquiries_html += "<p>No enquiries yet. <a href='/submit_enquiry'>Submit your first enquiry</a></p>"
-            import re
-            html = re.sub(
-                r'<div id="enquiries">.*?</div>',
-                f'<div id="enquiries">{enquiries_html}</div>',
-                html,
-                flags=re.DOTALL
-                )              
+                enquiries_rows = """
+                <tr>
+                    <td colspan="5" class="hod-empty-state">
+                        No enquiries submitted yet.
+                    </td>
+                </tr>
+                """
+
+            if not advisories_list:
+                advisories_list = """
+                <div class="hod-empty-state">
+                    No advisories have been issued yet.
+                </div>
+                """
+
+            with open("Pages/enquirer_dashboard.html", "r", encoding="utf-8") as file:
+                html = file.read()
+
+            html = html.replace("{{total_enquiries}}", str(total_enquiries))
+            html = html.replace("{{new_enquiries}}", str(new_enquiries))
+            html = html.replace("{{assigned_enquiries}}", str(assigned_enquiries))
+            html = html.replace("{{completed_enquiries}}", str(completed_enquiries))
+            html = html.replace("{{enquiries_rows}}", enquiries_rows)
+            html = html.replace("{{advisories_list}}", advisories_list)
+
+            self.send_response(200)
+            self.send_header("Content-type", "text/html")
+            self.end_headers()
             self.wfile.write(html.encode())
         else:
             self.send_response(404)

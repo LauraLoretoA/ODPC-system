@@ -7,27 +7,108 @@
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-    <div class="page-shell">
-        <header class="header">
-            <img src="/logo.png" alt="ODPC logo" class="logo">
-            <h1>My Enquiries</h1>
+    <div class="hod-page">
+        <header class="hod-topbar">
+            <div class="hod-brand">
+                <img src="/logo.png" alt="ODPC logo" class="hod-logo">
+                <div>
+                    <p class="hod-eyebrow">Office of the Data Protection Commissioner</p>
+                    <h1>Enquirer Dashboard</h1>
+                </div>
+            </div>
+            <a href="/enquirer_logout" class="hod-logout-btn">Logout</a>
         </header>
-        <main class="container">
-            <section class="card">
-                <h2>Your Enquiries</h2>
-<div id="enquiries">
-                    <!-- Dynamic load by /enquirer_dashboard -->
-                </div>
-                <div class="item-actions">
-                    <a href="/submit_enquiry"><button>New Enquiry</button></a>
-                    <a href="/enquirer_logout"><button>Logout</button></a>
-                </div>
-            </section>
-        </main>
+
+        <div class="hod-layout">
+            <aside class="hod-sidebar">
+                <nav class="hod-nav">
+                    <button class="hod-nav-button active" data-tab="overview">Overview</button>
+                    <button class="hod-nav-button" data-tab="my-enquiries">My Enquiries</button>
+                    <button class="hod-nav-button" data-tab="issued-advisories">Issued Advisories</button>
+                </nav>
+            </aside>
+
+            <main class="hod-main">
+                <section id="overview" class="hod-panel">
+                    <div class="hod-panel-header">
+                        <div>
+                            <h2>Overview</h2>
+                            <p>Track your submitted enquiries and advisory progress.</p>
+                        </div>
+                        <a href="/submit_enquiry">
+                            <button type="button">Submit New Enquiry</button>
+                        </a>
+                    </div>
+
+                    <div class="hod-card-grid">
+                        <article class="hod-stat-card hod-new">
+                            <span class="hod-stat-label">Total Enquiries</span>
+                            <strong class="hod-stat-value">{{total_enquiries}}</strong>
+                        </article>
+
+                        <article class="hod-stat-card hod-assigned">
+                            <span class="hod-stat-label">New</span>
+                            <strong class="hod-stat-value">{{new_enquiries}}</strong>
+                        </article>
+
+                        <article class="hod-stat-card hod-completed">
+                            <span class="hod-stat-label">Assigned</span>
+                            <strong class="hod-stat-value">{{assigned_enquiries}}</strong>
+                        </article>
+
+                        <article class="hod-stat-card hod-total">
+                            <span class="hod-stat-label">Completed</span>
+                            <strong class="hod-stat-value">{{completed_enquiries}}</strong>
+                        </article>
+                    </div>
+                </section>
+
+                <section id="my-enquiries" class="hod-panel hidden">
+                    <div class="hod-panel-header">
+                        <div>
+                            <h2>My Enquiries</h2>
+                            <p>View all enquiries you have submitted to the Compliance Department.</p>
+                        </div>
+                    </div>
+
+                    <div class="hod-table-wrap">
+                        <table class="hod-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Subject</th>
+                                    <th>Status</th>
+                                    <th>Date Submitted</th>
+                                    <th>Deadline</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {{enquiries_rows}}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section id="issued-advisories" class="hod-panel hidden">
+                    <div class="hod-panel-header">
+                        <div>
+                            <h2>Issued Advisories</h2>
+                            <p>View completed advisory responses issued for your enquiries.</p>
+                        </div>
+                    </div>
+
+                    <div class="hod-workload-list">
+                        {{advisories_list}}
+                    </div>
+                </section>
+            </main>
+        </div>
+
         <footer class="footer">
             © 2025 Office of the Data Protection Commissioner, Kenya
         </footer>
     </div>
+
     <script src="/main.js" defer></script>
 </body>
 </html>
