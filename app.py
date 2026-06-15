@@ -1,16 +1,28 @@
+# Imports used for dates and deadline calculations.
+# datetime gives the current date/time; timedelta helps add days, such as the 10-day enquiry deadline.
 from datetime import datetime, timedelta
+# Imports Python's built-in web server classes.
+# BaseHTTPRequestHandler lets us define how GET and POST requests are handled.
+# HTTPServer starts and keeps the web application running.
 from http.server import BaseHTTPRequestHandler, HTTPServer
+# Imports sqlite3 so the system can connect to the local SQLite database file odpc.db.
 import sqlite3
+# Imports URL/form parsing tools used to read submitted form data and query strings.
 import urllib.parse
+# Imports operating-system utilities used for folders, filenames, and file paths.
 import os
+# Imports mimetypes to detect the correct content type when downloading files.
 import mimetypes
 
 
+# Imports a helper function from another file to identify the logged-in enquirer from cookies.
 from Extras.auth import get_logged_in_enquirer_id
+
+# Records important user actions in the activity_logs table.
 def log_activity(user_id, action):
 
     conn = sqlite3.connect("odpc.db")
-    cursor = conn.cursor()
+    cursor = conn.cursor()  #executes sql commands
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -29,6 +41,8 @@ def log_activity(user_id, action):
 
     conn.commit()
     conn.close()
+
+# Creates a notification for a specific user
 def create_notification(user_id, message):
 
     conn = sqlite3.connect("odpc.db")
@@ -49,6 +63,9 @@ def create_notification(user_id, message):
 
     conn.commit()
     conn.close()
+
+# Checks whether an unread notification with the same message already exists.
+# This prevents duplicate deadline alert notifications from being created repeatedly
 def notification_exists(user_id, message):
 
     conn = sqlite3.connect("odpc.db")
@@ -67,6 +84,9 @@ def notification_exists(user_id, message):
     conn.close()
 
     return exists is not None
+
+# Reads the user_id from the browser cookie.
+# This is used to know which internal user is currently logged in.
 def get_logged_in_user_id(handler):
     cookie = handler.headers.get('Cookie')
     if not cookie:
@@ -80,6 +100,9 @@ def get_logged_in_user_id(handler):
     return None
 
 
+
+
+# It separates normal form fields into data and uploaded files into files.
 def parse_multipart(post_data, content_type):
     
     boundary_marker = "boundary="
@@ -96,7 +119,7 @@ def parse_multipart(post_data, content_type):
 
     data = {}
     files = {}
-
+       
     for part in parts:
         part = part.strip(b"\r\n")
         if not part or part == b"--":
@@ -142,15 +165,25 @@ def parse_multipart(post_data, content_type):
     return data, files
 
 
-# Ensure uploads directory exists
+
+# Ensures the uploads folder exists before any files are saved.
 os.makedirs("uploads", exist_ok=True)
 
+
+# Defines the port number where the local web server will run.
 PORT = 8000
 
 
+
+# Main request handler class for the whole web application.
+# It inherits from BaseHTTPRequestHandler so it can respond to browser requests.
 class MyHandler(BaseHTTPRequestHandler):
+
+    # Handles all GET requests.
+
     def do_GET(self):
 
+        # Route for serving the ODPC logo image to the browser.
         # Serve logo image
         if self.path in ["/logo%20odpc.png", "/logo odpc.png", "/logo.png"]:
             try:
@@ -166,6 +199,7 @@ class MyHandler(BaseHTTPRequestHandler):
                 self.end_headers()
             return
 
+        # Route for downloading or viewing uploaded advisory files from the uploads folder.
         # Serve uploaded files
         if self.path.startswith("/download/"):
             filename = os.path.basename(self.path[len("/download/"):])
@@ -187,6 +221,7 @@ class MyHandler(BaseHTTPRequestHandler):
                 self.wfile.write(b"File not found")
             return
 
+        # Serves the main CSS file so pages can load styling.
         if self.path == "/style.css":
             try:
                 with open("Static/style.css", "rb") as css:
@@ -200,6 +235,7 @@ class MyHandler(BaseHTTPRequestHandler):
                 self.send_response(404)
                 self.end_headers()
             return
+        # Serves the main JavaScript file used by the front-end pages.
         if self.path == "/main.js":
             try:
                 with open("Static/main.js", "rb") as js:
@@ -216,6 +252,7 @@ class MyHandler(BaseHTTPRequestHandler):
                 self.end_headers()
 
             return
+        # Displays the internal user login page.
         # Login page
         if self.path == "/" or self.path == "/login":
             self.send_response(200)
@@ -226,6 +263,9 @@ class MyHandler(BaseHTTPRequestHandler):
                 self.wfile.write(file.read().encode())
 
 # Admin Dashboard - Pending Enquirers for verification
+
+        # Admin dashboard route.
+        # Shows pending enquirer registrations, internal users, and admin notifications.
         elif self.path.startswith("/admin"):
             conn = sqlite3.connect("odpc.db")
             cursor = conn.cursor()
@@ -385,6 +425,8 @@ class MyHandler(BaseHTTPRequestHandler):
 
 
 
+
+        # Logs out the Admin by clearing the user_id cookie and redirecting to login.
         elif self.path == "/hod_logout":
             self.send_response(303)
             self.send_header("Set-Cookie", "user_id=; expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/")
@@ -392,6 +434,9 @@ class MyHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
+
+        # HOD dashboard route.
+        # Loads enquiry statistics, DPO workloads, deadline reports, notifications, and HOD profile data.
         elif self.path.startswith("/hod"):
             user_id = get_logged_in_user_id(self)
             if not user_id:
@@ -443,7 +488,8 @@ class MyHandler(BaseHTTPRequestHandler):
 
             cursor.execute("SELECT id, name, email FROM users WHERE role='DPO'")
             dpo_rows = cursor.fetchall()
-
+            
+            #empty lsts filled with data
             dpo_workloads = []
             available_dpos = []
             dpo_performance = []
@@ -456,6 +502,8 @@ class MyHandler(BaseHTTPRequestHandler):
                     ORDER BY id DESC
                 """, (dpo_id,))
                 assigned_rows = cursor.fetchall()
+                
+                #Workload
                 active_count = len([row for row in assigned_rows if row[2] != 'Completed'])
                 assigned_titles = [row[1] or f"Enquiry {row[0]}" for row in assigned_rows]
                 assigned_enquiry_ids = [str(row[0]) for row in assigned_rows]
@@ -463,7 +511,8 @@ class MyHandler(BaseHTTPRequestHandler):
                 pending_count = len([row for row in assigned_rows if row[2] != 'Completed'])
                 status_badge = "Available" if active_count < 3 else "Full"
                 badge_style = "hod-status-available" if active_count < 3 else "hod-status-full"
-
+                
+                # Store available dpos
                 if active_count < 3:
                     available_dpos.append({
                         "id": dpo_id,
@@ -503,7 +552,7 @@ class MyHandler(BaseHTTPRequestHandler):
             deadline_report = []
             approaching_deadline_count = 0
             overdue_count = 0
-
+            # Check enquiries to calculate deadlines
             enquiries_list = []
             for enq in enquiries:
                 enq_id, enq_name, enq_email, subject, description, date_received, status, assigned_dpo_id, dpo_name = enq
@@ -542,7 +591,7 @@ class MyHandler(BaseHTTPRequestHandler):
                         deadline_label = "OVERDUE"
                         deadline_status = "Overdue"
                         overdue_count += 1
-
+                    #affects notifications too
                     elif days_remaining <= 10:
                           deadline_label = f"{days_remaining} days left"
                           deadline_status = "Approaching Deadline"
@@ -567,10 +616,10 @@ class MyHandler(BaseHTTPRequestHandler):
                 #Alerts
                 if deadline_status in ["Approaching Deadline", "Overdue"]:
                     hod_message = f"Deadline alert: Enquiry #{enq_id} is {deadline_status.lower()}"
-
+                     #duplication fix 
                     if not notification_exists(user_id, hod_message):
                         create_notification(user_id, hod_message)
-
+                    #also notifies dpo
                     if assigned_dpo_id:
                         dpo_message = f"Deadline alert: Enquiry #{enq_id} is {deadline_status.lower()}"
 
@@ -584,6 +633,7 @@ class MyHandler(BaseHTTPRequestHandler):
                     "daysRemaining": days_remaining_value,
                     "deadlineStatus": deadline_status
                 })
+                #convert notifs to dictionaries 
             notifications_list = []
 
             for note in notifications:
@@ -591,6 +641,8 @@ class MyHandler(BaseHTTPRequestHandler):
                     "message": note[0],
                     "createdAt": note[1]
                 })
+                
+                #combines all hod data
             hod_state = {
                 "stats": {
                     "new": new_enquiries,
@@ -626,6 +678,9 @@ class MyHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(html.encode())
 
+
+        # DPO dashboard route.
+    
         elif self.path.startswith("/dpo"):
 
             user_id = get_logged_in_user_id(self)
@@ -642,7 +697,7 @@ class MyHandler(BaseHTTPRequestHandler):
                 "SELECT name, email FROM users WHERE id=?",
                 (user_id,)
             )
-
+            #fetch dpo notifications
             profile = cursor.fetchone()
             cursor.execute("""
                 SELECT message, created_at
@@ -726,7 +781,7 @@ class MyHandler(BaseHTTPRequestHandler):
                         deadline_status = "No date recorded"
                         
                     card_status = review_status if review_status else "Not reviewed"
-
+                    #Enquiry card
                     dpo_enquiries_html += f"""
                     <article class='hod-workload-card' data-status="{card_status}">
                         <div class='hod-workload-card-header'>
@@ -803,6 +858,9 @@ class MyHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(html.encode())
 
+
+        # Draft advisory page route.
+        # Opens the form where a DPO prepares an advisory response for a selected enquiry.
         elif self.path.startswith("/draft_advisory"):
 
             user_id = get_logged_in_user_id(self)
@@ -811,8 +869,9 @@ class MyHandler(BaseHTTPRequestHandler):
                 self.send_header("Location", "/login")
                 self.end_headers()
                 return
-
+            #checks query
             query = urllib.parse.urlparse(self.path).query
+            #converts query
             params = urllib.parse.parse_qs(query)
 
             enquiry_id = params.get("enquiry_id", [None])[0]
@@ -862,6 +921,8 @@ class MyHandler(BaseHTTPRequestHandler):
 
             self.wfile.write(html.encode())
 
+
+        # DDC dashboard route.
         elif self.path.startswith("/ddc"):
 
             conn = sqlite3.connect("odpc.db")
@@ -884,7 +945,7 @@ class MyHandler(BaseHTTPRequestHandler):
 
             notifications = cursor.fetchall()
             
-            
+            #Fetch advisories pending review
             cursor.execute("""
                 SELECT
                     advisories.id,
@@ -983,18 +1044,24 @@ class MyHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(html.encode())
 
+
+        # Displays the enquirer registration page.
         elif self.path.startswith("/enquirer_register"):
             self.send_response(200)
             self.send_header("Content-type", "text/html")
             self.end_headers()
             with open("Pages/enquirer_register.html", "r") as file:
                 self.wfile.write(file.read().encode())
+
+        # Displays the enquirer login page.
         elif self.path.startswith("/enquirer_login"):
             self.send_response(200)
             self.send_header("Content-type", "text/html")
             self.end_headers()
             with open("Pages/enquirer_login.html", "r") as file:
                 self.wfile.write(file.read().encode())
+
+        # Processes an enquiry submitted by a logged-in enquirer.
         elif self.path == "/submit_enquiry":
             self.send_response(200)
             self.send_header("Content-type", "text/html")
@@ -1002,7 +1069,9 @@ class MyHandler(BaseHTTPRequestHandler):
             with open("Pages/submit_enquiry.html", "r") as file:
                 self.wfile.write(file.read().encode())
                 
-                
+         
+
+        # Enquirer dashboard route.
         elif self.path.startswith("/enquirer_dashboard"):
             enquirer_id = get_logged_in_enquirer_id(self)
 
@@ -1122,8 +1191,12 @@ class MyHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b"Page not found")
 
+
+    # Handles all POST requests.
+
     def do_POST(self):
 
+        
         # LOGIN LOGIC
         if self.path == "/" or self.path.startswith("/login"):
 
@@ -1148,7 +1221,7 @@ class MyHandler(BaseHTTPRequestHandler):
             if user:
                 user_id = user[0]
                 role = user[1]
-
+                #activity log 
                 log_activity(
                     user_id,
                     f"Logged into the system as {role}"
@@ -1173,6 +1246,7 @@ class MyHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 
 
+        
         # CREATE USER LOGIC (ADMIN)
         elif self.path == "/create_user":
 
@@ -1206,6 +1280,7 @@ class MyHandler(BaseHTTPRequestHandler):
             self.send_header("Location", "/admin?success=User created successfully")
             self.end_headers()
 
+        # Allows Admin to delete an internal user account.
         #DELETE USER LOGIC (ADMIN)
         elif self.path == "/delete_user":
 
@@ -1239,6 +1314,7 @@ class MyHandler(BaseHTTPRequestHandler):
             self.send_header("Location", "/admin?success=User deleted successfully")
             self.end_headers()   
 
+        # Allows Admin to approve a pending enquirer profile.
         # VERIFY ENQUIRER (ADMIN)
         elif self.path == "/verify_enquirer":
             content_length = int(self.headers['Content-Length'])
@@ -1313,13 +1389,14 @@ class MyHandler(BaseHTTPRequestHandler):
             return
 
         
+        
         # ASSIGN DPO LOGIC (HOD)
         elif self.path == "/assign_dpo":
 
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             data = urllib.parse.parse_qs(post_data.decode())
-
+            #Extract form values
             enquiry_id = data.get("enquiry_id")[0]
             dpo_id = data.get("dpo_id")[0]
 
@@ -1361,6 +1438,8 @@ class MyHandler(BaseHTTPRequestHandler):
             self.send_header("Location", "/hod?success=DPO assigned successfully")
             self.end_headers()
 
+
+        # Updates the HOD profile name and email.
         elif self.path == "/hod_update_profile":
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
@@ -1391,6 +1470,8 @@ class MyHandler(BaseHTTPRequestHandler):
             self.send_header("Location", "/hod?success=Profile updated successfully")
             self.end_headers()
 
+
+        # Allows the HOD to change password after confirming the old password.
         elif self.path == "/hod_change_password":
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
@@ -1420,7 +1501,7 @@ class MyHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 
                 return
-
+            #Check if current password is correct
             conn = sqlite3.connect("odpc.db")
             cursor = conn.cursor()
             cursor.execute("SELECT id FROM users WHERE id = ? AND password = ? AND role = 'HOD'", (hod_user_id, old_password))
@@ -1431,7 +1512,7 @@ class MyHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 
                 return
-
+            #Update new password in DB
             cursor.execute("UPDATE users SET password = ? WHERE id = ?", (new_password, hod_user_id))
             conn.commit()
             log_activity(
@@ -1444,6 +1525,7 @@ class MyHandler(BaseHTTPRequestHandler):
             self.send_header("Location", "/hod?success=Password changed successfully")
             self.end_headers()
 
+        
         # SUBMIT ADVISORY LOGIC (DPO)
         elif self.path == "/submit_advisory":
 
@@ -1531,6 +1613,8 @@ class MyHandler(BaseHTTPRequestHandler):
             self.send_header("Location", "/dpo?success=Advisory submitted successfully")
             self.end_headers()
 
+
+        # Allows the DDC to approve an advisory or return it to the DPO for revision.
         elif self.path == "/review_advisory":
 
             content_length = int(self.headers['Content-Length'])
@@ -1598,6 +1682,8 @@ class MyHandler(BaseHTTPRequestHandler):
                 self.send_header("Location", "/ddc?success=Advisory returned for revision")
             self.end_headers()
 
+
+        # Processes new enquirer registration and keeps the profile pending until Admin approval.
         elif self.path == "/enquirer_register":
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
@@ -1707,6 +1793,8 @@ class MyHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
 
+
+        # Processes enquirer login only if the account has been approved by Admin.
         elif self.path == "/enquirer_login":
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
@@ -1731,6 +1819,8 @@ class MyHandler(BaseHTTPRequestHandler):
                 self.send_header("Location", "/enquirer_login?error=Invalid credentials or account not approved")
                 self.end_headers()
 
+
+        # Processes an enquiry submitted by a logged-in enquirer.
         elif self.path == "/submit_enquiry":
             enquirer_id = get_logged_in_enquirer_id(self)
             if not enquirer_id:
@@ -1780,11 +1870,15 @@ class MyHandler(BaseHTTPRequestHandler):
             self.send_header("Location", "/enquirer_dashboard")
             self.end_headers()
 
+
+        # Logs out the enquirer by clearing the enquirer_id cookie.
         elif self.path == "/enquirer_logout":
             self.send_response(303)
             self.send_header("Set-Cookie", "enquirer_id=; expires=Thu, 01 Jan 1970 00:00:00 GMT")
             self.send_header("Location", "/")
             self.end_headers()
+
+        # Updates the DPO profile name and email.
         elif self.path == "/dpo_update_profile":
 
             content_length = int(
@@ -1824,6 +1918,8 @@ class MyHandler(BaseHTTPRequestHandler):
             self.send_response(303)
             self.send_header("Location", "/dpo?success=Profile updated successfully")
             self.end_headers()
+
+        # Allows the DPO to change password after checking the old password.
         elif self.path == "/dpo_change_password":
 
             content_length = int(
@@ -1900,6 +1996,8 @@ class MyHandler(BaseHTTPRequestHandler):
             self.send_response(303)
             self.send_header("Location", "/dpo?success=Password changed successfully")
             self.end_headers()
+
+        # Updates the DDC profile name and email.
         elif self.path == "/ddc_update_profile":
 
             content_length = int(self.headers['Content-Length'])
@@ -1933,6 +2031,8 @@ class MyHandler(BaseHTTPRequestHandler):
             self.send_header("Location", "/ddc?success=Profile updated successfully")
             self.end_headers()
 
+
+        # Allows the DDC to change password after checking the old password.
         elif self.path == "/ddc_change_password":
 
             content_length = int(self.headers['Content-Length'])
@@ -1993,12 +2093,16 @@ class MyHandler(BaseHTTPRequestHandler):
             self.send_response(303)
             self.send_header("Location", "/ddc?success=Password changed successfully")
             self.end_headers()
+
+# Starts the HTTP server on localhost using the defined PORT and MyHandler class.
 def run():
     server = HTTPServer(("localhost", PORT), MyHandler)
     print(f"Server running on http://localhost:{PORT}")
     server.serve_forever()
 
 
+
+# Ensures the server only starts when this file is run directly, not when imported by another file.
 if __name__ == "__main__":
     run()
 

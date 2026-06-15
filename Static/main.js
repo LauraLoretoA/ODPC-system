@@ -1,3 +1,4 @@
+//Switching between tabs 
 function selectTab(tabName) {
     document.querySelectorAll('.hod-nav-button').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.tab === tabName);
@@ -7,18 +8,18 @@ function selectTab(tabName) {
         panel.classList.toggle('hidden', panel.id !== tabName);
     });
 }
-
+// Dash for missing data
 function formatText(text) {
     return text ? text : '—';
 }
-
+//Dashboard statistics
 function renderStats(state) {
     document.getElementById('stat-new').textContent = state.stats.new;
     document.getElementById('stat-assigned').textContent = state.stats.assigned;
     document.getElementById('stat-completed').textContent = state.stats.completed;
     document.getElementById('stat-total-active').textContent = state.stats.totalActive;
 }
-
+//enquiries table rendering
 function renderEnquiries(state) {
     const tbody = document.getElementById('enquiries-tbody');
     tbody.innerHTML = '';
@@ -89,7 +90,7 @@ function renderEnquiries(state) {
         tbody.appendChild(tr);
     });
 }
-
+//Workload
 function renderWorkload(state) {
     const container = document.getElementById('dpo-workload-list');
     container.innerHTML = '';
@@ -139,6 +140,7 @@ function renderProfile(state) {
     document.getElementById('hod-name').value = state.profile.name || '';
     document.getElementById('hod-email').value = state.profile.email || '';
 }
+// Filtering functions 
 function filterEnquiries(status) {
     const rows = document.querySelectorAll("#enquiries-tbody tr");
 
@@ -172,7 +174,7 @@ function filterCards(status) {
 }
 //Function for feedback messages 
 function showToastFromURL() {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(window.location.search);  //reads url query
     const success = params.get("success");
     const error = params.get("error");
 
