@@ -345,19 +345,37 @@ button[disabled] {
 }
 
 .hod-new {
-  background: linear-gradient(135deg, #0b63a5, #0f93c7);
+  background: linear-gradient(135deg, #dc2626, #991b1b);
+  color: #ffffff;
 }
 
 .hod-assigned {
-  background: linear-gradient(135deg, #0f93c7, #48bceb);
+  background: linear-gradient(135deg, #2563eb, #1e40af);
+  color: #ffffff;
 }
 
 .hod-completed {
-  background: linear-gradient(135deg, #12a287, #7dd3fc);
+  background: linear-gradient(135deg, #16a34a, #166534);
+  color: #ffffff;
 }
 
 .hod-total {
-  background: linear-gradient(135deg, #09456d, #2d6a9d);
+  background: linear-gradient(135deg, #0b4a6f, #0891c7);
+  color: #ffffff;
+}
+
+.hod-new .hod-stat-value,
+.hod-assigned .hod-stat-value,
+.hod-completed .hod-stat-value,
+.hod-total .hod-stat-value {
+  color: #ffffff;
+}
+
+.hod-new .hod-stat-label,
+.hod-assigned .hod-stat-label,
+.hod-completed .hod-stat-label,
+.hod-total .hod-stat-label {
+  color: #ffffff;
 }
 
 .hod-stat-label {

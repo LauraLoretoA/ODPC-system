@@ -41,7 +41,31 @@ def log_activity(user_id, action):
 
     conn.commit()
     conn.close()
+    
+#Activity logs but for enquirers
+def log_enquirer_activity(enquirer_id, action):
 
+    conn = sqlite3.connect("odpc.db")
+    cursor = conn.cursor()
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    cursor.execute("""
+        INSERT INTO activity_logs (
+            enquirer_id,
+            action,
+            timestamp
+        )
+        VALUES (?, ?, ?)
+    """, (
+        enquirer_id,
+        action,
+        timestamp
+    ))
+
+    conn.commit()
+    conn.close()
+    
 # Creates a notification for a specific user
 def create_notification(user_id, message):
 
@@ -780,7 +804,7 @@ class MyHandler(BaseHTTPRequestHandler):
                     else:
                         deadline_status = "No date recorded"
                         
-                    card_status = review_status if review_status else "Not reviewed"
+                    card_status = review_status if review_status else enquiry[6]
                     #Enquiry card
                     dpo_enquiries_html += f"""
                     <article class='hod-workload-card' data-status="{card_status}">
@@ -796,7 +820,7 @@ class MyHandler(BaseHTTPRequestHandler):
                         <p><strong>Description:</strong> {enquiry[4]}</p>
                         <p><strong>Date Received:</strong> {enquiry[5]}</p>
                         <p><strong>Deadline:</strong> {deadline_status}</p>
-                        <p><strong>Review Status:</strong> {review_status if review_status else "Not reviewed"}</p>
+                        <p><strong>Review Status:</strong> {review_status if review_status else enquiry[6]}</p>
                         <p><strong>Comment:</strong> {review_comment if review_comment else "None"}</p>
                     """
 
@@ -1186,6 +1210,23 @@ class MyHandler(BaseHTTPRequestHandler):
             self.send_header("Content-type", "text/html")
             self.end_headers()
             self.wfile.write(html.encode())
+        elif self.path == "/enquirer_logout":
+            enquirer_id = get_logged_in_enquirer_id(self)
+
+            if enquirer_id:
+
+                log_enquirer_activity(
+                    enquirer_id,
+                    "Logged out of the enquirer portal"
+                )
+            self.send_response(303)
+            self.send_header(
+                "Set-Cookie",
+                "enquirer_id=; expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/"
+            )
+            self.send_header("Location", "/enquirer_login")
+            self.end_headers()
+            return
         else:
             self.send_response(404)
             self.end_headers()
@@ -1810,6 +1851,10 @@ class MyHandler(BaseHTTPRequestHandler):
             conn.close()
 
             if enquirer:
+                log_enquirer_activity(
+                    enquirer[0],
+                    "Logged into the enquirer portal"
+                )
                 self.send_response(303)
                 self.send_header("Set-Cookie", f"enquirer_id={enquirer[0]}; Path=/")
                 self.send_header("Location", "/enquirer_dashboard?success=Login successful")
@@ -1848,11 +1893,10 @@ class MyHandler(BaseHTTPRequestHandler):
                 VALUES (?, ?, ?, ?, ?, 'New', ?)
             """, (enquirer[0], enquirer[1], subject, description, date_received, enquirer_id))
             conn.commit()
-           # log_activity(
-            #    user_id=None,
-             #   enquirer_id,
-              #  action="Submitted enquiry"
-            #)
+            log_enquirer_activity(
+                enquirer_id,
+                f"Submitted enquiry: {subject}"
+            )
             cursor.execute(
                 "SELECT id FROM users WHERE role='HOD'"
             )
