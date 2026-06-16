@@ -1,5 +1,5 @@
 # Imports used for dates and deadline calculations.
-# datetime gives the current date/time; timedelta helps add days, such as the 10-day enquiry deadline.
+# datetime gives the current date/time; timedelta helps add days
 from datetime import datetime, timedelta
 # Imports Python's built-in web server classes.
 # BaseHTTPRequestHandler lets us define how GET and POST requests are handled.
@@ -13,6 +13,9 @@ import urllib.parse
 import os
 # Imports mimetypes to detect the correct content type when downloading files.
 import mimetypes
+import hashlib
+import secrets
+import re
 
 
 # Imports a helper function from another file to identify the logged-in enquirer from cookies.
@@ -110,20 +113,93 @@ def notification_exists(user_id, message):
     return exists is not None
 
 # Reads the user_id from the browser cookie.
-# This is used to know which internal user is currently logged in.
+# Enforces session management
+SESSION_TIMEOUT_MINUTES = 20
 def get_logged_in_user_id(handler):
-    cookie = handler.headers.get('Cookie')
+    cookie = handler.headers.get("Cookie")
     if not cookie:
         return None
 
+    user_id = None
+    last_active = None
+
     parts = cookie.split(";")
+
     for part in parts:
-        if "user_id=" in part:
-            return part.strip().split("=")[1]
+        part = part.strip()
 
-    return None
+        if part.startswith("user_id="):
+            user_id = part.split("=", 1)[1]
+
+        if part.startswith("last_active="):
+            last_active = part.split("=", 1)[1]
+
+    if not user_id or not last_active:
+        return None
+
+    try:
+        last_active_time = datetime.fromtimestamp(float(last_active))
+
+        if datetime.now() - last_active_time > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
+            return None
+
+    except Exception:
+        return None
+
+    return user_id
 
 
+
+def hash_password(password):
+    # Creates a random salt so that even identical passwords produce different hashes.
+    salt = secrets.token_hex(16)
+
+    # Hashes the password 
+    password_hash = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        100000
+    ).hex()
+
+    # Stores the method, salt, and hash together.
+    return f"pbkdf2_sha256${salt}${password_hash}"
+
+
+def verify_password(stored_password, entered_password):
+    # Checks hashed passwords
+    if stored_password.startswith("pbkdf2_sha256$"):
+        _, salt, saved_hash = stored_password.split("$", 2)
+
+        entered_hash = hashlib.pbkdf2_hmac(
+            "sha256",
+            entered_password.encode("utf-8"),
+            salt.encode("utf-8"),
+            100000
+        ).hex()
+
+        return secrets.compare_digest(saved_hash, entered_hash)
+
+    # This allows old accounts to still log in before their passwords are updated.
+    return stored_password == entered_password
+
+
+def is_strong_password(password):
+    # Password must be at least 8 characters.
+    if len(password) < 8:
+        return False
+
+    # Must contain uppercase, lowercase, number, and special character.
+    if not re.search(r"[A-Z]", password):
+        return False
+    if not re.search(r"[a-z]", password):
+        return False
+    if not re.search(r"\d", password):
+        return False
+    if not re.search(r"[^A-Za-z0-9]", password):
+        return False
+
+    return True
 
 
 # It separates normal form fields into data and uploaded files into files.
@@ -286,11 +362,18 @@ class MyHandler(BaseHTTPRequestHandler):
             with open("Pages/login.html", "r") as file:
                 self.wfile.write(file.read().encode())
 
-# Admin Dashboard - Pending Enquirers for verification
 
         # Admin dashboard route.
-        # Shows pending enquirer registrations, internal users, and admin notifications.
+        
         elif self.path.startswith("/admin"):
+            user_id = get_logged_in_user_id(self)
+
+            if not user_id:
+                self.send_response(303)
+                self.send_header("Location", "/login")
+                self.end_headers()
+                return
+
             conn = sqlite3.connect("odpc.db")
             cursor = conn.cursor()
             cursor.execute("""
@@ -450,10 +533,17 @@ class MyHandler(BaseHTTPRequestHandler):
 
 
 
-        # Logs out the Admin by clearing the user_id cookie and redirecting to login.
+        # Logs out the internal users by clearing the user_id cookie and redirecting to login.
         elif self.path == "/hod_logout":
             self.send_response(303)
-            self.send_header("Set-Cookie", "user_id=; expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/")
+            self.send_header(
+                "Set-Cookie",
+                "user_id=; expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/"
+            )
+            self.send_header(
+                "Set-Cookie",
+                "last_active=; expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/"
+            )
             self.send_header("Location", "/login")
             self.end_headers()
             return
@@ -699,6 +789,7 @@ class MyHandler(BaseHTTPRequestHandler):
 
             self.send_response(200)
             self.send_header("Content-type", "text/html")
+            self.send_header("Set-Cookie", f"last_active={datetime.now().timestamp()}; Path=/; HttpOnly; SameSite=Lax")
             self.end_headers()
             self.wfile.write(html.encode())
 
@@ -879,12 +970,12 @@ class MyHandler(BaseHTTPRequestHandler):
 
             self.send_response(200)
             self.send_header("Content-type", "text/html")
+            self.send_header("Set-Cookie", f"last_active={datetime.now().timestamp()}; Path=/; HttpOnly; SameSite=Lax")
             self.end_headers()
             self.wfile.write(html.encode())
 
 
         # Draft advisory page route.
-        # Opens the form where a DPO prepares an advisory response for a selected enquiry.
         elif self.path.startswith("/draft_advisory"):
 
             user_id = get_logged_in_user_id(self)
@@ -948,7 +1039,14 @@ class MyHandler(BaseHTTPRequestHandler):
 
         # DDC dashboard route.
         elif self.path.startswith("/ddc"):
+            user_id = get_logged_in_user_id(self)
 
+            if not user_id:
+                self.send_response(303)
+                self.send_header("Location", "/login")
+                self.end_headers()
+                return
+            
             conn = sqlite3.connect("odpc.db")
             cursor = conn.cursor()
             user_id = get_logged_in_user_id(self)
@@ -987,6 +1085,23 @@ class MyHandler(BaseHTTPRequestHandler):
             """)
 
             advisories = cursor.fetchall()
+            cursor.execute("""
+                SELECT
+                    advisories.id,
+                    enquiries.subject,
+                    enquiries.description,
+                    advisories.final_content,
+                    advisories.review_comment,
+                    advisories.advisory_title,
+                    advisories.file_path
+                FROM advisories
+                JOIN enquiries ON advisories.enquiry_id = enquiries.id
+                WHERE advisories.review_status = 'Approved'
+                ORDER BY advisories.id DESC
+            """)
+
+            completed_advisories = cursor.fetchall()
+
             notifications_html = ""
 
             if notifications:
@@ -1002,6 +1117,35 @@ class MyHandler(BaseHTTPRequestHandler):
             conn.close()
 
             ddc_advisories_html = ""
+            
+            completed_advisories_html = ""
+
+            if completed_advisories:
+                for adv in completed_advisories:
+                    file_link = ""
+                    if adv[6]:
+                       file_link = f"<p><strong>Attachment:</strong> <a href='/download/{adv[6]}' target='_blank'>{adv[6]}</a></p>"
+
+                    completed_advisories_html += f"""
+                    <article class='hod-workload-card'>
+                        <div class='hod-workload-card-header'>
+                            <div>
+                                <h3>{adv[5] if adv[5] else adv[1]}</h3>
+                                <p class='hod-small-text'>Advisory #{adv[0]}</p>
+                            </div>
+                            <span class='hod-badge hod-status-available'>Approved</span>
+                        </div>
+
+                        <p><strong>Subject:</strong> {adv[1]}</p>
+                        <p><strong>Description:</strong> {adv[2]}</p>
+                        <p><strong>Final Advisory:</strong><br>{adv[3] if adv[3] else "No written response"}</p>
+                        {file_link}
+                        <p><strong>Review Comment:</strong> {adv[4] if adv[4] else "None"}</p>
+                    </article>
+                    """
+            else:
+                completed_advisories_html = "<div class='hod-empty-state'>No completed advisories yet.</div>"
+            
 
             if advisories:
                 for adv in advisories:
@@ -1049,6 +1193,7 @@ class MyHandler(BaseHTTPRequestHandler):
                 html = file.read()
 
             html = html.replace("{{ddc_advisories}}", ddc_advisories_html)
+            html = html.replace("{{completed_advisories}}", completed_advisories_html)
             html = html.replace("{{ddc_notifications}}", notifications_html)
             html = html.replace("Loading...</span>", f"{profile_name}</span>", 1)
             html = html.replace("Loading...</span>", f"{profile_email}</span>", 1)
@@ -1065,6 +1210,7 @@ class MyHandler(BaseHTTPRequestHandler):
 
             self.send_response(200)
             self.send_header("Content-type", "text/html")
+            self.send_header("Set-Cookie", f"last_active={datetime.now().timestamp()}; Path=/; HttpOnly; SameSite=Lax")
             self.end_headers()
             self.wfile.write(html.encode())
 
@@ -1110,7 +1256,7 @@ class MyHandler(BaseHTTPRequestHandler):
 
             cursor.execute("""
                 SELECT e.id, e.subject, e.description, e.date_received, e.status,
-                       a.final_content, a.advisory_title
+                       a.final_content, a.advisory_title, a.file_path
                 FROM enquiries e
                 LEFT JOIN advisories a ON e.id = a.enquiry_id
                 WHERE e.enquirer_id = ?
@@ -1132,7 +1278,7 @@ class MyHandler(BaseHTTPRequestHandler):
 
             if enquiries:
                 for enquiry in enquiries:
-                    enq_id, subject, desc, date_str, status, final_content, advisory_title = enquiry
+                    enq_id, subject, desc, date_str, status, final_content, advisory_title, file_path = enquiry
 
                     if status == "Completed":
                         deadline_status = "N/A"
@@ -1165,7 +1311,18 @@ class MyHandler(BaseHTTPRequestHandler):
                     </tr>
                     """
 
-                    if status == "Completed" and final_content:
+                    if status == "Completed" and (final_content or file_path):
+                        file_link = ""
+
+                        if file_path:
+                            file_link = f"""
+                            <p>
+                                <strong>Attachment:</strong>
+                                <a href='/download/{file_path}' target='_blank'>
+                                    {file_path}
+                                </a>
+                            </p>
+                            """
                         advisories_list += f"""
                         <article class="hod-workload-card">
                             <div class="hod-workload-card-header">
@@ -1177,7 +1334,7 @@ class MyHandler(BaseHTTPRequestHandler):
                             </div>
 
                             <p><strong>Subject:</strong> {subject}</p>
-                            <p><strong>Advisory Response:</strong><br>{final_content}</p>
+                            <p><strong>Advisory Response:</strong><br>{final_content if final_content else "See attached advisory document."}</p>{file_link}
                         </article>
                         """
             else:
@@ -1252,24 +1409,34 @@ class MyHandler(BaseHTTPRequestHandler):
             cursor = conn.cursor()
 
             cursor.execute(
-                 "SELECT id, role FROM users WHERE email=? AND password=?",
-                 (email, password)
+                 "SELECT id, role, password FROM users WHERE email=?",
+                 (email,)
             )
 
             user = cursor.fetchone()
-            conn.close()
 
-            if user:
+            if user and verify_password(user[2], password):
                 user_id = user[0]
                 role = user[1]
+
+            #convert to a hashed password after login.
+                if not user[2].startswith("pbkdf2_sha256$"):
+                    cursor.execute(
+                        "UPDATE users SET password=? WHERE id=?",
+                        (hash_password(password), user_id)
+                )
+                conn.commit()
+
+                conn.close()
                 #activity log 
                 log_activity(
                     user_id,
                     f"Logged into the system as {role}"
                 )   
-
+                #store session cookies
                 self.send_response(303)
-                self.send_header("Set-Cookie", f"user_id={user_id}")
+                self.send_header("Set-Cookie", f"user_id={user_id}; Path=/; HttpOnly; SameSite=Lax")
+                self.send_header("Set-Cookie", f"last_active={datetime.now().timestamp()}; Path=/; HttpOnly; SameSite=Lax")
 
                 if role == "Admin":
                     self.send_header("Location", "/admin?success=Login successful")
@@ -1282,6 +1449,7 @@ class MyHandler(BaseHTTPRequestHandler):
                 self.end_headers()
 
             else:
+                conn.close()
                 self.send_response(303)
                 self.send_header("Location", "/login?error=Invalid email or password")
                 self.end_headers()
@@ -1299,6 +1467,17 @@ class MyHandler(BaseHTTPRequestHandler):
             email = data.get("email")[0]
             password = data.get("password")[0]
             role = data.get("role")[0]
+            #Checks for password policy
+            if not is_strong_password(password):
+                self.send_response(303)
+                self.send_header(
+                    "Location",
+                    "/admin?error=Password must have at least 8 characters, uppercase, lowercase, number and special character"
+                )
+                self.end_headers()
+                return
+
+            password = hash_password(password)
 
             conn = sqlite3.connect("odpc.db")
             cursor = conn.cursor()
@@ -1763,7 +1942,15 @@ class MyHandler(BaseHTTPRequestHandler):
                 self.send_header("Location", "/enquirer_register?error=Passwords do not match")
                 self.end_headers()
                 return
-                
+            
+            if not is_strong_password(password):
+                self.send_response(303)
+                self.send_header(
+                    "Location",
+                    "/enquirer_register?error=Password must have at least 8 characters, uppercase, lowercase, number and special character"
+                )
+                self.end_headers()
+                return    
 
             if enquirer_type == "individual" and not id_number:
                 self.send_response(303)
@@ -1812,7 +1999,7 @@ class MyHandler(BaseHTTPRequestHandler):
                     admin_verified
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-            """, (enquirer_type, name, email, password, pobox, location, county, kra_pin, id_number))
+            """, (enquirer_type, name, email, hash_password(password), pobox, location, county, kra_pin, id_number))
 
             conn.commit()
             cursor.execute(
@@ -1846,9 +2033,24 @@ class MyHandler(BaseHTTPRequestHandler):
 
             conn = sqlite3.connect("odpc.db")
             cursor = conn.cursor()
-            cursor.execute("SELECT id FROM enquirers WHERE email=? AND password=? AND admin_verified=1", (email, password))
+            cursor.execute(
+                "SELECT id, password FROM enquirers WHERE email=? AND admin_verified=1",
+                (email,)
+            )
+
             enquirer = cursor.fetchone()
-            conn.close()
+
+            if enquirer and verify_password(enquirer[1], password):
+
+              # convert  to a hashed password.
+                if not enquirer[1].startswith("pbkdf2_sha256$"):
+                    cursor.execute(
+                        "UPDATE enquirers SET password=? WHERE id=?",
+                        (hash_password(password), enquirer[0])
+                   )
+                conn.commit()
+
+                conn.close()
 
             if enquirer:
                 log_enquirer_activity(
@@ -1860,6 +2062,7 @@ class MyHandler(BaseHTTPRequestHandler):
                 self.send_header("Location", "/enquirer_dashboard?success=Login successful")
                 self.end_headers()
             else:
+                conn.close()
                 self.send_response(303)
                 self.send_header("Location", "/enquirer_login?error=Invalid credentials or account not approved")
                 self.end_headers()

@@ -16,13 +16,14 @@
                     <h1>Deputy Data Commissioner Review Dashboard</h1>
                 </div>
             </div>
-            <a href="/login" class="hod-logout-btn">Logout</a>
+            <a href="/hod_logout" class="hod-logout-btn">Logout</a>
         </header>
 
         <div class="hod-layout">
             <aside class="hod-sidebar">
                 <nav class="hod-nav">
                     <button class="hod-nav-button active" data-tab="review-advisories">Advisories for Review</button>
+                    <button class="hod-nav-button" data-tab="completed-advisories">Completed Advisories</button>
                     <button class="hod-nav-button" data-tab="notifications">Notifications</button>
                     <button class="hod-nav-button" data-tab="my-profile">My Profile</button>
                 </nav>
@@ -41,6 +42,18 @@
                         {{ddc_advisories}}
                     </div>
                 </section>
+                <section id="completed-advisories" class="hod-panel hidden">
+                    <div class="hod-panel-header">
+                        <div>
+                            <h2>Completed Advisories</h2>
+                            <p>View advisories that have already been approved and issued.</p>
+                        </div>
+                    </div>
+
+                    <div class="hod-workload-list">
+                        {{completed_advisories}}
+                    </div>
+                    </section>
 
                 <section id="notifications" class="hod-panel hidden">
                     <div class="hod-panel-header">
