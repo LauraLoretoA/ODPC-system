@@ -1,3 +1,4 @@
+# Authentication utilities for enquirers.
 def get_logged_in_enquirer_id(handler):
     """
     Get enquirer_id from cookie, similar to user_id.
@@ -10,7 +11,7 @@ def get_logged_in_enquirer_id(handler):
         if 'enquirer_id=' in part:
             return part.strip().split('=')[1]
     return None
-
+#Access control for enquirer login
 def require_enquirer_login(handler, redirect_path='/enquirer_login'):
     """
     Check if enquirer logged in, else redirect.
