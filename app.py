@@ -200,7 +200,17 @@ def is_strong_password(password):
         return False
 
     return True
+#input validation functions for enquirer registration form
+def is_valid_email(email):
+    return re.match(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$", email) is not None
 
+
+def is_valid_kra_pin(kra_pin):
+    return re.match(r"^[A-Z][0-9]{9}[A-Z]$", kra_pin) is not None
+
+
+def is_valid_id_number(id_number):
+    return id_number.isdigit() and len(id_number) in [7, 8]
 
 # It separates normal form fields into data and uploaded files into files.
 def parse_multipart(post_data, content_type):
@@ -390,6 +400,7 @@ class MyHandler(BaseHTTPRequestHandler):
                        admin_rejection_reason
                 FROM enquirers
                 WHERE admin_verified = 0
+                AND admin_rejection_reason IS NULL
                 ORDER BY id DESC
             """)
 
@@ -547,7 +558,38 @@ class MyHandler(BaseHTTPRequestHandler):
             self.send_header("Location", "/login")
             self.end_headers()
             return
+        #Download reports 
+        elif self.path == "/download_reports":
+            user_id = get_logged_in_user_id(self)
 
+            if not user_id:
+                self.send_response(303)
+                self.send_header("Location", "/login")
+                self.end_headers()
+                return
+
+            conn = sqlite3.connect("odpc.db")
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT id, enquirer_name, enquirer_email, subject, date_received, status, assigned_dpo_id
+                FROM enquiries
+                ORDER BY id DESC
+            """)
+
+            reports = cursor.fetchall()
+            conn.close()
+
+            csv_data = "ID,Enquirer Name,Email,Subject,Date Received,Status,Assigned DPO ID\n"
+
+            for report in reports:
+              csv_data += f"{report[0]},{report[1]},{report[2]},{report[3]},{report[4]},{report[5]},{report[6]}\n"
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv")
+            self.send_header("Content-Disposition", "attachment; filename=odpc_reports.csv")
+            self.end_headers()
+            self.wfile.write(csv_data.encode())
 
         # HOD dashboard route.
         # Loads enquiry statistics, DPO workloads, deadline reports, notifications, and HOD profile data.
@@ -1936,7 +1978,26 @@ class MyHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(b"Missing required fields")
                 return
+            
+            #input validation
+            if not is_valid_email(email):
+                self.send_response(303)
+                self.send_header("Location", "/enquirer_register?error=Invalid email format")
+                self.end_headers()
+                return
 
+            if not is_valid_kra_pin(kra_pin):
+                self.send_response(303)
+                self.send_header("Location", "/enquirer_register?error=Invalid KRA PIN format")
+                self.end_headers()
+                return
+
+            if enquirer_type == "individual" and not is_valid_id_number(id_number):
+                self.send_response(303)
+                self.send_header("Location", "/enquirer_register?error=Invalid ID number format")
+                self.end_headers()
+                return
+            
             if password != confirm_password:
                 self.send_response(303)
                 self.send_header("Location", "/enquirer_register?error=Passwords do not match")
